@@ -51,3 +51,6 @@ uImage
 .context
 # $(TOPDIR)/Makefile.[unix|win]::$(DIRLINKS_EXTERNAL_DIRS)
 .dirlinks
+# ignore espressif bootloader application
+/hello_world
+*.ddp

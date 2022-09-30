@@ -41,11 +41,11 @@ ifeq ($(CONFIG_LIBCXXABI),y)
 include libcxxabi.defs
 endif
 
-ifeq ($(CONFIG_LIBSUPCXX),y)
-CXXSRCS += libxx_impure.cxx
-else
+#ifeq ($(CONFIG_LIBSUPCXX),y)
+#CXXSRCS += libxx_impure.cxx
+#else
 CXXSRCS += libxx_eabi_atexit.cxx
-endif
+#endif
 
 CXXSRCS += libxx_cxa_atexit.cxx
 
