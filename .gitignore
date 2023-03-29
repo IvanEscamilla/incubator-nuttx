@@ -58,3 +58,6 @@ uImage
 .dirlinks
 .vscode
 .DS_Store
+# ignore espressif bootloader application
+/hello_world
+*.ddp

@@ -140,7 +140,7 @@ static void core1_boot(void)
   fifo_drain();
 
   /* Setup NVIC */
-
+  info("init core 1 NVIC\n");
   up_irqinitialize();
 
   /* Enable inter-processor FIFO interrupt */

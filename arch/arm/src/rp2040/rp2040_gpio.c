@@ -24,9 +24,9 @@
 
 #include <nuttx/config.h>
 
-#include <stdint.h>
 #include <assert.h>
 #include <debug.h>
+#include <stdint.h>
 
 #include <nuttx/arch.h>
 
@@ -56,34 +56,30 @@ static int g_gpio_function[RP2040_GPIO_NUM];
 
 /* GPIO pins function mapping table */
 
-static const int g_gpio_function_mapping_spi[2][5] =
-{
-  {  0,  4, 16, 20, -1 },     /* pin numbers assignable to SPI0 */
-  {  8, 12, 24, 28, -1 },     /* pin numbers assignable to SPI1 */
+static const int g_gpio_function_mapping_spi[2][5] = {
+    {0, 4,  16, 20, -1}, /* pin numbers assignable to SPI0 */
+    {8, 12, 24, 28, -1}, /* pin numbers assignable to SPI1 */
 };
 
-static const int g_gpio_function_mapping_uart[2][5] =
-{
-  {  0, 12, 16, 28, -1 },     /* pin numbers assignable to UART0 */
-  {  4,  8, 20, 24, -1 },     /* pin numbers assignable to UART1 */
+static const int g_gpio_function_mapping_uart[2][5] = {
+    {0, 12, 16, 28, -1}, /* pin numbers assignable to UART0 */
+    {4, 8,  20, 24, -1}, /* pin numbers assignable to UART1 */
 };
 
-static const int g_gpio_function_mapping_i2c[2][9] =
-{
-  {  0,  4,  8, 12, 16, 20, 24, 28, -1 }, /* pin numbers assignable to I2C0 */
-  {  2,  6, 10, 14, 18, 22, 26, -1, -1 }, /* pin numbers assignable to I2C1 */
+static const int g_gpio_function_mapping_i2c[2][9] = {
+    {0, 4, 8,  12, 16, 20, 24, 28, -1}, /* pin numbers assignable to I2C0 */
+    {2, 6, 10, 14, 18, 22, 26, -1, -1}, /* pin numbers assignable to I2C1 */
 };
 
-static const int g_gpio_function_mapping_pwm[8][3] =
-{
-  {  0, 16, -1 },             /* pin numbers assignable to PWM0 */
-  {  2, 18, -1 },             /* pin numbers assignable to PWM1 */
-  {  4, 20, -1 },             /* pin numbers assignable to PWM2 */
-  {  6, 22, -1 },             /* pin numbers assignable to PWM3 */
-  {  8, 24, -1 },             /* pin numbers assignable to PWM4 */
-  { 10, 26, -1 },             /* pin numbers assignable to PWM5 */
-  { 12, 28, -1 },             /* pin numbers assignable to PWM6 */
-  { 14, -1, -1 },             /* pin numbers assignable to PWM7 */
+static const int g_gpio_function_mapping_pwm[8][3] = {
+    {0,  16, -1}, /* pin numbers assignable to PWM0 */
+    {2,  18, -1}, /* pin numbers assignable to PWM1 */
+    {4,  20, -1}, /* pin numbers assignable to PWM2 */
+    {6,  22, -1}, /* pin numbers assignable to PWM3 */
+    {8,  24, -1}, /* pin numbers assignable to PWM4 */
+    {10, 26, -1}, /* pin numbers assignable to PWM5 */
+    {12, 28, -1}, /* pin numbers assignable to PWM6 */
+    {14, -1, -1}, /* pin numbers assignable to PWM7 */
 };
 
 /****************************************************************************
@@ -100,51 +96,51 @@ static const int g_gpio_function_mapping_pwm[8][3] =
 
 static int rp2040_gpio_interrupt(int irq, void *context, void *arg)
 {
-  int i;
-  int j;
-  uint32_t stat;
-  uint32_t gpio;
-  xcpt_t handler;
+    int i;
+    int j;
+    uint32_t stat;
+    uint32_t gpio;
+    xcpt_t handler;
 
-  /* Scan all GPIO interrupt status registers */
-
-  for (i = 0; i < 4; i++)
+    /* Scan all GPIO interrupt status registers */
+    gpioinfo("Interrupt!");
+    for (i = 0; i < 4; i++)
     {
-      /* Get and clear pending GPIO interrupt status */
+        /* Get and clear pending GPIO interrupt status */
 
-      stat = getreg32(RP2040_IO_BANK0_PROC_INTS(i * 8, 0));
-      if (i == 3)
+        stat = getreg32(RP2040_IO_BANK0_PROC_INTS(i * 8, 0));
+        if (i == 3)
         {
-          stat &= 0x00ffffff;     /* Clear reserved bits */
+            stat &= 0x00ffffff; /* Clear reserved bits */
         }
 
-      putreg32(stat, RP2040_IO_BANK0_INTR(i * 8));
+        putreg32(stat, RP2040_IO_BANK0_INTR(i * 8));
 
-      while (stat != 0)
+        while (stat != 0)
         {
-          /* Scan all GPIO pins in one register */
+            /* Scan all GPIO pins in one register */
 
-          for (j = 0; j < 8; j++)
+            for (j = 0; j < 8; j++)
             {
-              if (stat & (0xf << (j * 4)))
+                if (stat & (0xf << (j * 4)))
                 {
-                  stat &= ~(0xf << (j * 4));
+                    stat &= ~(0xf << (j * 4));
 
-                  gpio = i * 8 + j;
-                  handler = g_gpio_irq_handlers[gpio];
+                    gpio    = i * 8 + j;
+                    handler = g_gpio_irq_handlers[gpio];
 
-                  /* Call GPIO interrupt handler */
+                    /* Call GPIO interrupt handler */
 
-                  if (handler)
+                    if (handler)
                     {
-                      handler(gpio, context, g_gpio_irq_args[gpio]);
+                        handler(gpio, context, g_gpio_irq_args[gpio]);
                     }
                 }
             }
         }
     }
 
-  return OK;
+    return OK;
 }
 
 /****************************************************************************
@@ -161,64 +157,64 @@ static int rp2040_gpio_interrupt(int irq, void *context, void *arg)
 
 int rp2040_gpio_get_function_pin(uint32_t func, uint32_t port)
 {
-  int i;
-  const int *mapping;
+    int i;
+    const int *mapping;
 
-  /* Get GPIO pins function mapping table */
+    /* Get GPIO pins function mapping table */
 
-  switch (func)
+    switch (func)
     {
-      case RP2040_GPIO_FUNC_SPI:
+    case RP2040_GPIO_FUNC_SPI:
         if (port >= 2)
-          {
+        {
             return -1;
-          }
+        }
 
         mapping = g_gpio_function_mapping_spi[port];
         break;
 
-      case RP2040_GPIO_FUNC_UART:
+    case RP2040_GPIO_FUNC_UART:
         if (port >= 2)
-          {
+        {
             return -1;
-          }
+        }
 
         mapping = g_gpio_function_mapping_uart[port];
         break;
 
-      case RP2040_GPIO_FUNC_I2C:
+    case RP2040_GPIO_FUNC_I2C:
         if (port >= 2)
-          {
+        {
             return -1;
-          }
+        }
 
         mapping = g_gpio_function_mapping_i2c[port];
         break;
 
-      case RP2040_GPIO_FUNC_PWM:
+    case RP2040_GPIO_FUNC_PWM:
         if (port >= 8)
-          {
+        {
             return -1;
-          }
+        }
 
         mapping = g_gpio_function_mapping_pwm[port];
         break;
 
-      default:
+    default:
         return -1;
     }
 
-  /* Find the specified function in the current assignment */
+    /* Find the specified function in the current assignment */
 
-  for (i = 0; mapping[i] >= 0; i++)
+    for (i = 0; mapping[i] >= 0; i++)
     {
-      if (g_gpio_function[mapping[i]] == func)
+        if (g_gpio_function[mapping[i]] == func)
         {
-          return mapping[i];
+            return mapping[i];
         }
     }
 
-  return -1;
+    return -1;
 }
 
 /****************************************************************************
@@ -231,16 +227,16 @@ int rp2040_gpio_get_function_pin(uint32_t func, uint32_t port)
 
 void rp2040_gpio_set_function(uint32_t gpio, uint32_t func)
 {
-  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+    DEBUGASSERT(gpio < RP2040_GPIO_NUM);
 
-  modbits_reg32(RP2040_PADS_BANK0_GPIO_IE,
-                RP2040_PADS_BANK0_GPIO_IE | RP2040_PADS_BANK0_GPIO_OD,
-                RP2040_PADS_BANK0_GPIO(gpio));
+    modbits_reg32(RP2040_PADS_BANK0_GPIO_IE,
+                  RP2040_PADS_BANK0_GPIO_IE | RP2040_PADS_BANK0_GPIO_OD,
+                  RP2040_PADS_BANK0_GPIO(gpio));
 
-  putreg32(func & RP2040_IO_BANK0_GPIO_CTRL_FUNCSEL_MASK,
-           RP2040_IO_BANK0_GPIO_CTRL(gpio));
+    putreg32(func & RP2040_IO_BANK0_GPIO_CTRL_FUNCSEL_MASK,
+             RP2040_IO_BANK0_GPIO_CTRL(gpio));
 
-  g_gpio_function[gpio] = func;
+    g_gpio_function[gpio] = func;
 }
 
 /****************************************************************************
@@ -253,12 +249,12 @@ void rp2040_gpio_set_function(uint32_t gpio, uint32_t func)
 
 void rp2040_gpio_set_pulls(uint32_t gpio, int up, int down)
 {
-  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+    DEBUGASSERT(gpio < RP2040_GPIO_NUM);
 
-  modbits_reg32((up   ? RP2040_PADS_BANK0_GPIO_PUE : 0) |
-                (down ? RP2040_PADS_BANK0_GPIO_PDE : 0),
-                RP2040_PADS_BANK0_GPIO_PUE | RP2040_PADS_BANK0_GPIO_PDE,
-                RP2040_PADS_BANK0_GPIO(gpio));
+    modbits_reg32((up ? RP2040_PADS_BANK0_GPIO_PUE : 0) |
+                      (down ? RP2040_PADS_BANK0_GPIO_PDE : 0),
+                  RP2040_PADS_BANK0_GPIO_PUE | RP2040_PADS_BANK0_GPIO_PDE,
+                  RP2040_PADS_BANK0_GPIO(gpio));
 }
 
 /****************************************************************************
@@ -271,11 +267,11 @@ void rp2040_gpio_set_pulls(uint32_t gpio, int up, int down)
 
 void rp2040_gpio_init(uint32_t gpio)
 {
-  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+    DEBUGASSERT(gpio < RP2040_GPIO_NUM);
 
-  rp2040_gpio_setdir(gpio, false);
-  rp2040_gpio_put(gpio, false);
-  rp2040_gpio_set_function(gpio, RP2040_GPIO_FUNC_SIO);
+    rp2040_gpio_setdir(gpio, false);
+    rp2040_gpio_put(gpio, false);
+    rp2040_gpio_set_function(gpio, RP2040_GPIO_FUNC_SIO);
 }
 
 /****************************************************************************
@@ -286,32 +282,32 @@ void rp2040_gpio_init(uint32_t gpio)
  *
  ****************************************************************************/
 
-int rp2040_gpio_irq_attach(uint32_t gpio, uint32_t intrmode,
-                           xcpt_t isr, void *arg)
+int rp2040_gpio_irq_attach(uint32_t gpio, uint32_t intrmode, xcpt_t isr,
+                           void *arg)
 {
-  if (!g_gpio_irq_init)
+    if (!g_gpio_irq_init)
     {
-      /* Initialize - register GPIO interrupt handler */
-
-      g_gpio_irq_init = true;
-      irq_attach(RP2040_IO_IRQ_BANK0, rp2040_gpio_interrupt, NULL);
-      up_enable_irq(RP2040_IO_IRQ_BANK0);
+        /* Initialize - register GPIO interrupt handler */
+        gpioinfo("register gpio interrupt handler");
+        g_gpio_irq_init = true;
+        irq_attach(RP2040_IO_IRQ_BANK0, rp2040_gpio_interrupt, arg);
+        up_enable_irq(RP2040_IO_IRQ_BANK0);
     }
 
-  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
-  DEBUGASSERT(intrmode <= RP2040_GPIO_INTR_EDGE_HIGH);
+    DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+    DEBUGASSERT(intrmode <= RP2040_GPIO_INTR_EDGE_HIGH);
 
-  /* Save handler information */
+    /* Save handler information */
 
-  g_gpio_irq_handlers[gpio] = isr;
-  g_gpio_irq_args[gpio] = arg;
-  g_gpio_irq_modes[gpio] = intrmode;
+    g_gpio_irq_handlers[gpio] = isr;
+    g_gpio_irq_args[gpio]     = arg;
+    g_gpio_irq_modes[gpio]    = intrmode;
 
-  /* Clear pending interrupts */
+    /* Clear pending interrupts */
 
-  setbits_reg32(0xf << ((gpio % 8) * 4), RP2040_IO_BANK0_INTR(gpio));
+    setbits_reg32(0xf << ((gpio % 8) * 4), RP2040_IO_BANK0_INTR(gpio));
 
-  return OK;
+    return OK;
 }
 
 /****************************************************************************
@@ -324,17 +320,24 @@ int rp2040_gpio_irq_attach(uint32_t gpio, uint32_t intrmode,
 
 void rp2040_gpio_enable_irq(uint32_t gpio)
 {
-  uint32_t reg;
+    uint32_t reg;
 
-  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+    DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+    gpioinfo("Enable IRQ\n");
 
-  if (g_gpio_irq_handlers[gpio] != NULL)
+    if (g_gpio_irq_handlers[gpio] != NULL)
     {
-      /* Set interrupt enable bit */
+        /* Set interrupt enable bit */
+        gpioinfo("gpio: %d, mode: %d handler: %p\n", gpio,
+                 g_gpio_irq_modes[gpio], g_gpio_irq_handlers[gpio]);
+        gpioinfo("clear bits: %x\n", 0xf << ((gpio % 8) * 4));
+        gpioinfo("set bits: %x\n",
+                 0x1 << ((gpio % 8) * 4 + g_gpio_irq_modes[gpio]));
 
-      reg = RP2040_IO_BANK0_PROC_INTE(gpio, 0);
-      clrbits_reg32(0xf << ((gpio % 8) * 4), reg);
-      setbits_reg32(0x1 << ((gpio % 8) * 4 + g_gpio_irq_modes[gpio]), reg);
+        reg = RP2040_IO_BANK0_PROC_INTE(gpio, 0);
+        gpioinfo("reg: %x\n", reg);
+        clrbits_reg32(0xf << ((gpio % 8) * 4), reg);
+        setbits_reg32(0x1 << ((gpio % 8) * 4 + g_gpio_irq_modes[gpio]), reg);
     }
 }
 
@@ -348,16 +351,17 @@ void rp2040_gpio_enable_irq(uint32_t gpio)
 
 void rp2040_gpio_disable_irq(uint32_t gpio)
 {
-  uint32_t reg;
+    uint32_t reg;
 
-  DEBUGASSERT(gpio < RP2040_GPIO_NUM);
-
-  if (g_gpio_irq_handlers[gpio] != NULL)
+    DEBUGASSERT(gpio < RP2040_GPIO_NUM);
+    gpioinfo("Disable IRQ\n");
+    if (g_gpio_irq_handlers[gpio] != NULL)
     {
-      /* Clear interrupt enable bit */
-
-      reg = RP2040_IO_BANK0_PROC_INTE(gpio, 0);
-      clrbits_reg32(0xf << ((gpio % 8) * 4), reg);
+        /* Clear interrupt enable bit */
+        gpioinfo("Clear interrupt en bit %d for handler %p\n", gpio,
+                 g_gpio_irq_handlers[gpio]);
+        reg = RP2040_IO_BANK0_PROC_INTE(gpio, 0);
+        clrbits_reg32(0xf << ((gpio % 8) * 4), reg);
     }
 }
 
@@ -371,10 +375,10 @@ void rp2040_gpio_disable_irq(uint32_t gpio)
 
 void rp2040_gpio_initialize(void)
 {
-  int i;
+    int i;
 
-  for (i = 0; i < RP2040_GPIO_NUM; i++)
+    for (i = 0; i < RP2040_GPIO_NUM; i++)
     {
-      g_gpio_function[i] = RP2040_GPIO_FUNC_NULL;
+        g_gpio_function[i] = RP2040_GPIO_FUNC_NULL;
     }
 }

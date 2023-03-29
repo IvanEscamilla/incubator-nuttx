@@ -556,7 +556,7 @@ static ssize_t can_read(FAR struct file *filep, FAR char *buffer,
   FAR struct can_dev_s     *dev = inode->i_private;
 #endif
 
-  caninfo("buflen: %d\n", buflen);
+  //caninfo("buflen: %d\n", buflen);
 
   /* The caller must provide enough memory to catch the smallest possible
    * message.  This is not a system error condition, but we won't permit
@@ -1300,7 +1300,7 @@ int can_receive(FAR struct can_dev_s *dev, FAR struct can_hdr_s *hdr,
   int                      sval;
   int                      ret;
 
-  caninfo("ID: %" PRId32 " DLC: %d\n", (uint32_t)hdr->ch_id, hdr->ch_dlc);
+  //caninfo("ID: %" PRId32 " DLC: %d\n", (uint32_t)hdr->ch_id, hdr->ch_dlc);
 
   /* Check if adding this new message would over-run the drivers ability to
    * enqueue read data.
