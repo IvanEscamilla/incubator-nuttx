@@ -309,6 +309,10 @@
 /* There really is no upper limit on the number of vectors */
 
 #define IOV_MAX        INT_MAX
+#if defined(CONFIG_NET_LWIP) || defined(CONFIG_EXTERNAL_LWIPSTACK) && (IOV_MAX > 0xFFFF)
+#undef IOV_MAX
+#define IOV_MAX        0xFFFF
+#endif
 
 #define HOST_NAME_MAX  32
 

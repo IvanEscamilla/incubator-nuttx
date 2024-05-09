@@ -640,7 +640,9 @@ int up_fbinitialize(int display)
 
   priv->stride = ((size_t)priv->xres * priv->pinfo.bpp + 7) >> 3;
   priv->fblen  = priv->stride * priv->yres;
-
+  
+  lcdinfo("Allocate fbmem %d bytes", priv->fblen);
+  
   priv->fbmem  = kmm_zalloc(priv->fblen);
   if (priv->fbmem == NULL)
     {
@@ -660,6 +662,8 @@ int up_fbinitialize(int display)
   area.y = 0;
   area.w = priv->xres;
   area.h = priv->yres;
+
+  lcdinfo("Update area x:%d, y:%d, w:%d, h:%d", area.x, area.y, area.w, area.h);
 
   ret = lcdfb_updateearea(&priv->vtable, &area);
   if (ret < 0)

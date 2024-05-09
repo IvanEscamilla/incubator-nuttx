@@ -554,6 +554,10 @@ define FINDSCRIPT
 	$(if $(wildcard $(BOARD_DIR)$(DELIM)scripts$(DELIM)$(1)),$(BOARD_DIR)$(DELIM)scripts$(DELIM)$(1),$(BOARD_COMMON_DIR)$(DELIM)scripts$(DELIM)$(1))
 endef
 
+define FINDSCRIPTMOD
+	$(if $(wildcard $(BOARD_DIR)$(DELIM)scripts$(DELIM)$(1)),$(BOARD_DIR)$(DELIM)scripts$(DELIM)$(1),$(BOARD_COMMON_DIR)$(DELIM)$(CONFIG_ARCH)$(DELIM)$(CONFIG_ARCH_CHIP)$(DELIM)scripts$(DELIM)$(1))
+endef
+
 # DOWNLOAD - Download file. The URL base is joined with TARBALL by '/' and
 #            downloaded to the TARBALL file.
 #            The third argument is an output path. The second argument is used
