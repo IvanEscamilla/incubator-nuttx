@@ -140,9 +140,9 @@ ifeq ($(CONFIG_RISCV_TOOLCHAIN),GNU_RVG)
     CROSSDEV ?= riscv-none-elf-
   else
     ifeq ($(CONFIG_RISCV_TOOLCHAIN_GNU_RV32),y)
-      CROSSDEV ?= riscv32-unknown-elf-
+      CROSSDEV ?= riscv32-esp-elf-
     else
-      CROSSDEV ?= riscv64-unknown-elf-
+      CROSSDEV ?= riscv64-esp-elf-
     endif
   endif
 
