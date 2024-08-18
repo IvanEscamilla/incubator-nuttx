@@ -40,6 +40,7 @@ endif
 ifeq ($(CONFIG_LIBCXXABI), y)
 CXXFLAGS += ${DEFINE_PREFIX}LIBCXX_BUILDING_LIBCXXABI
 CXXFLAGS += -I $(TOPDIR)/libs/libxx/libcxxabi/include
+#CXXFLAGS += -I $(TOPDIR)/libs/libxx/libcxx/src/include
 endif
 
 # C++ABI files

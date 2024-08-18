@@ -325,6 +325,16 @@ static int bat_monitor_ioctl(FAR struct file *filep, int cmd,
             }
         }
         break;
+      
+      case BATIOC_CAPACITY:
+        {
+          FAR b16_t *ptr = (FAR b16_t *)((uintptr_t)arg);
+          if (ptr)
+            {
+              ret = dev->ops->soc(dev, ptr);
+            }
+        }
+        break;
 
       case BATIOC_CURRENT:
         {

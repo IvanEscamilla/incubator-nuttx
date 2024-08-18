@@ -208,13 +208,6 @@ static void up_idlepm(void)
     }
   else
     {
-      if (oldstate == PM_NORMAL)
-        {
-          /* Relax normal operation */
-
-          pm_relax(PM_IDLE_DOMAIN, PM_NORMAL);
-        }
-
 #ifdef CONFIG_WATCHDOG
       /* Announce the power management state change to feed watchdog */
 
