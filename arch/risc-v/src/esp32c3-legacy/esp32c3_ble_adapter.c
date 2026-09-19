@@ -60,6 +60,7 @@
 #include "esp32c3_wireless.h"
 #include "esp32c3_ble_adapter.h"
 #include "esp32c3_wireless.h"
+#include "esp32c3_rtc.h"
 
 #ifdef CONFIG_ESP32C3_WIFI_BT_COEXIST
 #  include "esp_coexist_internal.h"
@@ -81,6 +82,9 @@
 
 #define BTDM_MIN_SLEEP_DURATION          (24) /* threshold of interval in half slots to allow to fall into modem sleep */
 #define BTDM_MODEM_WAKE_UP_DELAY         (8)  /* delay in half slots of modem wake up procedure, including re-enable PHY/RF */
+
+#define RTC_CLK_CAL_FRACT  19
+
 #endif
 
 /****************************************************************************
@@ -293,6 +297,10 @@ static int queue_send_wrapper(void *queue, void *item,
 static int queue_recv_wrapper(void *queue, void *item,
                               uint32_t block_time_ms);
 static void queue_delete_wrapper(void *queue);
+
+static void bt_phy_disable(void);
+
+static void bt_phy_enable(void);
 
 #ifdef CONFIG_PM
 static bool btdm_sleep_check_duration(int32_t *half_slot_cnt);
@@ -1407,6 +1415,114 @@ static uint32_t IRAM_ATTR btdm_hus_2_lpcycles(uint32_t us)
 }
 
 #ifdef CONFIG_PM
+
+/****************************************************************************
+ * Name: esp_timer_create
+ *
+ * Description:
+ *   Create timer with given arguments
+ *
+ * Input Parameters:
+ *   create_args - Timer arguments data pointer
+ *   out_handle  - Timer handle pointer
+ *
+ * Returned Value:
+ *   0 if success or -1 if fail
+ *
+ ****************************************************************************/
+
+esp_err_t esp_timer_create(const esp_timer_create_args_t *create_args,
+                           esp_timer_handle_t *out_handle)
+{
+  int ret;
+  struct rt_timer_args_s rt_timer_args;
+  struct rt_timer_s *rt_timer;
+
+  rt_timer_args.arg = create_args->arg;
+  rt_timer_args.callback = create_args->callback;
+
+  ret = rt_timer_create(&rt_timer_args, &rt_timer);
+  if (ret)
+    {
+      wlerr("ERROR: Failed to create rt_timer error=%d\n", ret);
+      return ret;
+    }
+
+  *out_handle = (esp_timer_handle_t)rt_timer;
+
+  return 0;
+}
+
+/****************************************************************************
+ * Name: esp_timer_delete
+ *
+ * Description:
+ *   Delete timer and free resource
+ *
+ * Input Parameters:
+ *   timer  - Timer handle pointer
+ *
+ * Returned Value:
+ *   0 if success or -1 if fail
+ *
+ ****************************************************************************/
+
+esp_err_t esp_timer_delete(esp_timer_handle_t timer)
+{
+  struct rt_timer_s *rt_timer = (struct rt_timer_s *)timer;
+
+  rt_timer_delete(rt_timer);
+
+  return 0;
+}
+
+/****************************************************************************
+ * Name: esp_timer_start_once
+ *
+ * Description:
+ *   Start timer with one shot mode
+ *
+ * Input Parameters:
+ *   timer      - Timer handle pointer
+ *   timeout_us - Timeout value by micro second
+ *
+ * Returned Value:
+ *   0 if success or -1 if fail
+ *
+ ****************************************************************************/
+
+esp_err_t esp_timer_start_once(esp_timer_handle_t timer, uint64_t timeout_us)
+{
+  struct rt_timer_s *rt_timer = (struct rt_timer_s *)timer;
+
+  rt_timer_start(rt_timer, timeout_us, false);
+
+  return 0;
+}
+
+/****************************************************************************
+ * Name: esp_timer_stop
+ *
+ * Description:
+ *   Stop timer
+ *
+ * Input Parameters:
+ *   timer  - Timer handle pointer
+ *
+ * Returned Value:
+ *   0 if success or -1 if fail
+ *
+ ****************************************************************************/
+
+esp_err_t esp_timer_stop(esp_timer_handle_t timer)
+{
+  struct rt_timer_s *rt_timer = (struct rt_timer_s *)timer;
+
+  rt_timer_stop(rt_timer);
+
+  return 0;
+}
+
 /****************************************************************************
  * Name: btdm_sleep_exit_phase0
  *
@@ -1575,6 +1691,7 @@ static void btdm_sleep_enter_phase2_wrapper(void)
       if (g_lp_stat.pm_lock_released == false)
         {
           esp32c3_pm_lockrelease();
+          _info("btdm_sleep_enter_phase2_wrapper pm lock released\n");
           g_lp_stat.pm_lock_released = true;
         }
     }
@@ -2016,7 +2133,7 @@ int esp32c3_bt_controller_init(void)
           .name = "btSlp",
         };
 
-      if ((err = esp_timer_create(&create_args, &g_btdm_slp_tmr)) != ESP_OK)
+      if (esp_timer_create(&create_args, &g_btdm_slp_tmr)!= ESP_OK)
         {
           goto error;
         }
@@ -2229,6 +2346,7 @@ int esp32c3_bt_controller_disable(void)
   if (g_lp_stat.pm_lock_released == false)
     {
       esp32c3_pm_lockrelease();
+      _info("esp32c3_bt_controller_disable pm lock released\n");
       g_lp_stat.pm_lock_released = true;
     }
   else
@@ -2276,7 +2394,8 @@ int esp32c3_bt_controller_enable(esp_bt_mode_t mode)
 #ifdef CONFIG_PM
   /* enable low power mode */
 
-  esp32c3_pm_lockacquire();
+  // esp32c3_pm_lockacquire();
+  _info("pm lock acquired\n");
   g_lp_stat.pm_lock_released = false;
 
   if (g_lp_cntl.enable)
@@ -2310,6 +2429,7 @@ error:
   if (g_lp_stat.pm_lock_released == false)
     {
       esp32c3_pm_lockrelease();
+        _err("error pm lock released\n");
       g_lp_stat.pm_lock_released = true;
     }
 #endif
