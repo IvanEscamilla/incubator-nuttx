@@ -33,45 +33,9 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/debug.h>
 #include <nuttx/config.h>
-#include <nuttx/spi/spi.h>
-#include <nuttx/irq.h>
-#include <nuttx/wireless/ioctl.h>
 
 #include <stdint.h>
-#include <stdbool.h>
-#include <endian.h>
-
-/****************************************************************************
- * Settings
- ****************************************************************************/
-
-/* Driver settings */
-
-#define SX126X_MAX_DEVICES          2
-#define SX126X_SPI_SPEED            500000
-
-/* LoRa defaults */
-
-#define SX126X_DEFAULT_LORA_SF                 SX126X_LORA_SF10
-#define SX126X_DEFAULT_LORA_BW                 SX126X_LORA_BW_125
-#define SX126X_DEFAULT_LORA_CR                 SX126X_LORA_CR_4_8
-#define SX126X_DEFAULT_LORA_CRC_EN             true
-#define SX126X_DEFAULT_LORA_FIXED_HEADER       false
-#define SX126X_DEFAULT_LORA_PREAMBLES          12
-#define SX126X_DEFAULT_LORA_LDO                false
-
-/* Common defaults */
-
-#define SX126X_DEFAULT_FREQ               869525000
-#define SX126X_DEFAULT_POWER              0x0e
-#define SX126X_DEFAULT_PACKET_TYPE        SX126X_PACKETTYPE_LORA
-#define SX126X_DEFAULT_SYNCWORD           {0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-
-/* Hardware defaults */
-
-#define SX126X_DEFAULT_INVERT_IQ          false
 
 /****************************************************************************
  * Pre-processor Definitions
@@ -81,14 +45,31 @@
 
 #define SX126X_REG_SYNCWORD       0x06C0 /* Start of Byte 0 - Byte 7 */
 #define SX126X_REG_SYNCWORD_LEN   8      /* Bytes */
-#define SX126X_REG_NODEADDR       0x06CD /* Node address to filter. Default 0x00 */      
-#define SX126X_REG_BRDCASTADDR    0x06CE /* Broadcast address to filter. Default 0x00 */      
+#define SX126X_REG_NODEADDR       0x06CD /* Node address to filter. Default 0x00 */
+#define SX126X_REG_BRDCASTADDR    0x06CE /* Broadcast address to filter. Default 0x00 */
 #define SX126X_REG_CRC_INIT_MSB   0x06BC /* Default 0x1D */
 #define SX126X_REG_CRC_INIT_LSB   0x06BD /* Default 0x0F */
 #define SX126X_REG_CRC_POLY_MSB   0x06BE /* Default 0x10 */
 #define SX126X_REG_CRC_POLY_LSB   0x06BF /* Default 0x21 */
 #define SX126X_REG_WHITENING_MSB  0x06B8 /* Default 0x01 */
 #define SX126X_REG_WHITENING_LSB  0x06B9 /* Default 0x00 */
+#define SX126X_REG_IQ_POLARITY    0x0736 /* Errata 15.4: bit 2 */
+#define SX126X_REG_LR_SYNCWORD    0x0740 /* LoRa sync word MSB, LSB at +1 */
+#define SX126X_REG_RNGBASE        0x0819 /* Random number, 4 bytes */
+#define SX126X_REG_TX_MODULATION  0x0889 /* Errata 15.1: bit 2 */
+#define SX126X_REG_RX_GAIN        0x08AC /* 0x94 power saving, 0x96 boosted */
+#define SX126X_REG_TX_CLAMP       0x08D8 /* Errata 15.2: bits 4:1 */
+#define SX126X_REG_OCP            0x08E7 /* Over current protection */
+#define SX126X_REG_RTC_CTRL       0x0902 /* Errata 15.3 */
+#define SX126X_REG_EVT_MASK       0x0944 /* Errata 15.3: bit 1 */
+
+#define SX126X_RX_GAIN_POWER_SAVING   0x94
+#define SX126X_RX_GAIN_BOOSTED        0x96
+
+/* LoRa sync words (registers 0x0740/0x0741) */
+
+#define SX126X_LORA_SYNCWORD_PRIVATE  0x1424
+#define SX126X_LORA_SYNCWORD_PUBLIC   0x3444
 
 /* Enum and constant definitions ********************************************/
 
@@ -149,8 +130,8 @@
 #define SX126X_SETSTANDBY_PARAMS        1
 #define SX126X_SETSTANDBY_CONF_PARAM    0
 #define SX126X_SETSTANDBY_CONF_SHIFT    0                                 /* Bit 0-1: STDBY mode */
-#  define SX126X_SETSTANDBY_CONF_RC     (0<<SX126X_SETSTANDBY_CONF_SHIFT) 
-#  define SX126X_SETSTANDBY_CONF_XOSC   (1<<SX126X_SETSTANDBY_CONF_SHIFT) 
+#  define SX126X_SETSTANDBY_CONF_RC     (0<<SX126X_SETSTANDBY_CONF_SHIFT)
+#  define SX126X_SETSTANDBY_CONF_XOSC   (1<<SX126X_SETSTANDBY_CONF_SHIFT)
 
 /* SetFS */
 
@@ -159,17 +140,17 @@
 /* SetTX */
 
 #define SX126X_SETTX                    0x83        /* Opcode */
-#define SX126X_SETTX_PARAMS             2
+#define SX126X_SETTX_PARAMS             3
 #define SX126X_SETTX_TIMEOUT_PARAM      0
-#define SX126X_SETTX_TIMEOUT_PARAMS     2
+#define SX126X_SETTX_TIMEOUT_PARAMS     3
 #define SX126X_SETTX_NO_TIMEOUT         0x000000    /* Constant */
 
 /* SetRX */
 
 #define SX126X_SETRX                    0x82        /* Opcode */
-#define SX126X_SETRX_PARAMS             2
+#define SX126X_SETRX_PARAMS             3
 #define SX126X_SETRX_TIMEOUT_PARAM      0
-#define SX126X_SETRX_TIMEOUT_PARAMS     2
+#define SX126X_SETRX_TIMEOUT_PARAMS     3
 #define SX126X_SETRX_NO_TIMEOUT         0x000000    /* Constant */
 #define SX126X_SETRX_CONTINUOUS         0xFFFFFF    /* Constant */
 
@@ -184,9 +165,9 @@
 #define SX126X_SETRXDUTYCYCLE                       0x94 /* Opcode */
 #define SX126X_SETRXDUTYCYCLE_PARAMS                6
 #define SX126X_SETRXDUTYCYCLE_RXPERIOD_PARAM        0
-#define SX126X_SETRXDUTYCYCLE_RXPERIOD_PARAMS       3  
+#define SX126X_SETRXDUTYCYCLE_RXPERIOD_PARAMS       3
 #define SX126X_SETRXDUTYCYCLE_SLEEPPERIOD_PARAM     3
-#define SX126X_SETRXDUTYCYCLE_SLEEPPERIOD_PARAMS    3  
+#define SX126X_SETRXDUTYCYCLE_SLEEPPERIOD_PARAMS    3
 
 /* SetCAD */
 
@@ -216,6 +197,7 @@
 #define SX126X_CALIBRATE_ADC_BULK_N_EN      (1<<4)
 #define SX126X_CALIBRATE_ADC_BULK_P_EN      (1<<5)
 #define SX126X_CALIBRATE_IMAGE_EN           (1<<6)
+#define SX126X_CALIBRATE_ALL                0x7f
 
 /* CalibrateImage */
 
@@ -246,7 +228,7 @@
 #define SX126X_WRITEREGISTER_ADDRESS_PARAM      0
 #define SX126X_WRITEREGISTER_ADDRESS_PARAMS     2
 #define SX126X_WRITEREGISTER_DATA_PARAM         2 /* Data extends, address is auto incremented */
-#define SX126X_WRITEREGISTER_STATUS_RETURN      0 /* Gets returned every byte sent */ 
+#define SX126X_WRITEREGISTER_STATUS_RETURN      0 /* Gets returned every byte sent */
 
 /* ReadRegister Function */
 
@@ -382,7 +364,7 @@
 #define SX126X_SETCADPARAMS_CADDETMIN_PARAM     2
 #define SX126X_SETCADPARAMS_CADEXITMODE_PARAM   3 /* Takes SX126x_CAD_x */
 #define SX126X_SETCADPARAMS_CADTIMEOUT_PARAM    4 /* RxTimeout = cadTimeout * 15.625 */
-#define SX126X_SETCADPARAMS_CADTIMEOUI_PARAMS   3
+#define SX126X_SETCADPARAMS_CADTIMEOUT_PARAMS   3
 
 /* SetBufferBaseAddress */
 
@@ -414,6 +396,15 @@
 #define SX126X_GETRSSIINST_STAT_RETURN   0
 #define SX126X_GETRSSIINST_RSSI_RETURN   1
 
+/* GetPacketStatus (LoRa) */
+
+#define SX126X_GETPACKETSTATUS                  0x14
+#define SX126X_GETPACKETSTATUS_RETURNS          4
+#define SX126X_GETPACKETSTATUS_STATUS_RETURN    0
+#define SX126X_GETPACKETSTATUS_RSSIPKT_RETURN   1 /* -RssiPkt/2 dBm */
+#define SX126X_GETPACKETSTATUS_SNRPKT_RETURN    2 /* SnrPkt/4 dB, signed */
+#define SX126X_GETPACKETSTATUS_SIGRSSI_RETURN   3 /* -SignalRssiPkt/2 dBm */
+
 /* GetRxBufferStatus */
 
 #define SX126X_GETRXBUFFERSTATUS                      0x13
@@ -430,11 +421,38 @@
 #define SX126X_GETDEVICEERRORS_RETURNS          3
 #define SX126X_GETDEVICEERRORS_STATUS_RETURN    0
 #define SX126X_GETDEVICEERRORS_OPERROR_RETURN   1
-#define SX126X_GETDEVICEERRORS_OPERROR_RETURNS  2 
+#define SX126X_GETDEVICEERRORS_OPERROR_RETURNS  2
 
 /* ClearDeviceErrors */
 
 #define SX126X_CLEARDEVICEERRORS                0x07
 #define SX126X_CLEARDEVICEERRORS_NOPS           2
+
+/* Device errors (GetDeviceErrors) */
+
+#define SX126X_DEVERR_RC64K_CALIB           (1<<0)
+#define SX126X_DEVERR_RC13M_CALIB           (1<<1)
+#define SX126X_DEVERR_PLL_CALIB             (1<<2)
+#define SX126X_DEVERR_ADC_CALIB             (1<<3)
+#define SX126X_DEVERR_IMG_CALIB             (1<<4)
+#define SX126X_DEVERR_XOSC_START            (1<<5)
+#define SX126X_DEVERR_PLL_LOCK              (1<<6)
+#define SX126X_DEVERR_PA_RAMP               (1<<8)
+
+/* SetCadParams cadSymbolNum values */
+
+#define SX126X_CAD_ON_1_SYMB                0x00
+#define SX126X_CAD_ON_2_SYMB                0x01
+#define SX126X_CAD_ON_4_SYMB                0x02
+#define SX126X_CAD_ON_8_SYMB                0x03
+#define SX126X_CAD_ON_16_SYMB               0x04
+
+/* Chip modes (GetStatus) */
+
+#define SX126X_CHIPMODE_STBY_RC             2
+#define SX126X_CHIPMODE_STBY_XOSC           3
+#define SX126X_CHIPMODE_FS                  4
+#define SX126X_CHIPMODE_RX                  5
+#define SX126X_CHIPMODE_TX                  6
 
 #endif /* __DRIVERS_WIRELESS_LPWAN_SX126X_SX126X_H */

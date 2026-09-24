@@ -5,24 +5,124 @@
 
 if LPWAN_SX126X
 
+config LPWAN_SX126X_MAX_DEVICES
+	int "SX126X maximum devices"
+	default 1
+	range 1 4
+	---help---
+		Number of SX126x radios that can be registered (dev_number in
+		struct sx126x_lower_s must be below this).
+
+config LPWAN_SX126X_SPIFREQ
+	int "SX126X SPI frequency (Hz)"
+	default 4000000
+	range 100000 16000000
+	---help---
+		The SX126x supports SPI clocks up to 16 MHz.
+
 config LPWAN_SX126X_RFFREQ_DEFAULT
 	int "SX126X default RF frequency Hz"
-	default 869252000
+	default 915000000
+	range 150000000 960000000
 
 config LPWAN_SX126X_SF_DEFAULT
 	int "SX126X default spreading factor"
-	default 10
+	default 7
+	range 5 12
 
 config LPWAN_SX126X_BW_DEFAULT
 	int "SX126X default bandwidth kHz"
 	default 125
+	---help---
+		One of 7, 10, 15, 20, 31, 41, 62, 125, 250, 500.  The nearest
+		supported bandwidth is used.
 
 config LPWAN_SX126X_CR_DEFAULT
-	int "SX126X default coding rate"
-	default 8
+	int "SX126X default coding rate (4/x)"
+	default 5
+	range 5 8
 
-config LPWAN_SX126X_MAX_DEVICES
-	int "SX126X maximum devices"
-	default 1
+config LPWAN_SX126X_TXPOWER_DEFAULT
+	int "SX126X default TX power (dBm)"
+	default 14
+	range -17 22
+	---help---
+		Clamped to -9..22 dBm on the SX1262 and -17..14 dBm on the SX1261,
+		and further by the board limit_tx_power() callback.
+
+config LPWAN_SX126X_PREAMBLE_DEFAULT
+	int "SX126X default preamble length (symbols)"
+	default 8
+	range 1 65535
+
+config LPWAN_SX126X_SYNCWORD
+	hex "SX126X default LoRa sync word (registers 0x0740/0x0741)"
+	default 0x1424
+	---help---
+		0x1424 is the LoRa private network sync word (0x12 on the SX127x),
+		0x3444 the public (LoRaWAN) one.
+
+config LPWAN_SX126X_CRC_DEFAULT
+	bool "SX126X hardware payload CRC enabled by default"
+	default y
+
+config LPWAN_SX126X_RXBOOST
+	bool "SX126X boosted RX gain by default"
+	default n
+	---help---
+		About 2 dB more sensitivity for about 0.6 mA more RX current.
+
+choice
+	prompt "SX126X idle state"
+	default LPWAN_SX126X_IDLE_STANDBY
+	---help---
+		State the radio returns to after a TX, a single RX or a CAD.
+		Can be changed with SX126XIOC_IDLESET.
+
+config LPWAN_SX126X_IDLE_STANDBY
+	bool "Standby (STDBY_RC)"
+
+config LPWAN_SX126X_IDLE_RX
+	bool "Continuous RX"
+
+config LPWAN_SX126X_IDLE_SLEEP
+	bool "Warm sleep"
+
+endchoice # SX126X idle state
+
+config LPWAN_SX126X_RXFIFO_LEN
+	int "SX126X RX FIFO depth (packets)"
+	default 4
+	range 1 64
+	---help---
+		Received packets are queued here until read().  Each entry takes
+		about 266 bytes.  When full, the oldest packet is dropped.
+
+config LPWAN_SX126X_NPOLLWAITERS
+	int "SX126X number of poll waiters"
+	default 2
+	range 1 8
+
+config LPWAN_SX126X_RX_TIMEOUT_DEFAULT
+	int "SX126X default read() timeout (ms)"
+	default 0
+	range 0 262143
+	---help---
+		0 means read() blocks until a packet arrives.  Can be changed with
+		SX126XIOC_RXTIMEOUTSET.
+
+config LPWAN_SX126X_TX_TIMEOUT_MARGIN
+	int "SX126X TX timeout margin (ms)"
+	default 500
+	---help---
+		write() fails with -ETIMEDOUT when TxDone does not arrive within
+		the packet time on air plus this margin.
+
+config LPWAN_SX126X_RX_CRCERR
+	bool "SX126X deliver packets with CRC errors"
+	default n
+	---help---
+		Queue packets that failed the hardware CRC check, with crc_err set
+		in struct sx126x_read_hdr_s.  By default they are dropped.
 
 endif # LPWAN_SX126X

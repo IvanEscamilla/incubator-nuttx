@@ -368,6 +368,12 @@ static int sx127x_lora_syncword_set(FAR struct sx127x_dev_s *dev,
                                     FAR uint8_t *sw, uint8_t len);
 static void sx127x_lora_syncword_get(FAR struct sx127x_dev_s *dev,
                                      FAR uint8_t *sw, uint8_t *len);
+static int sx127x_lora_bw_set(FAR struct sx127x_dev_s *dev, uint8_t bw);
+static int sx127x_lora_cr_set(FAR struct sx127x_dev_s *dev, uint8_t cr);
+static int sx127x_lora_sf_set(FAR struct sx127x_dev_s *dev, uint8_t sf);
+static int sx127x_lora_crc_set(FAR struct sx127x_dev_s *dev, bool crcon);
+static uint32_t sx127x_lora_bw_to_hz(uint8_t bw);
+static int sx127x_lora_bw_from_hz(uint32_t hz);
 
 #  ifdef CONFIG_LPWAN_SX127X_RXSUPPORT
 static int8_t sx127x_lora_snr_get(FAR struct sx127x_dev_s *dev);
@@ -1065,6 +1071,162 @@ static int sx127x_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           break;
         }
 
+#ifdef CONFIG_LPWAN_SX127X_LORA
+      /* Set LORA spreading factor.  arg: Pointer to uint8_t, 6..12.
+       * SF6 is only valid with implicit header mode already enabled.
+       */
+
+      case WLIOC_LORA_SETSF:
+        {
+          FAR uint8_t *ptr = (FAR uint8_t *)((uintptr_t)arg);
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          ret = sx127x_lora_sf_set(dev, *ptr);
+          break;
+        }
+
+      /* Get LORA spreading factor.  arg: Pointer to uint8_t */
+
+      case WLIOC_LORA_GETSF:
+        {
+          FAR uint8_t *ptr = (FAR uint8_t *)((uintptr_t)arg);
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          *ptr = dev->lora.sf;
+          break;
+        }
+
+      /* Set LORA bandwidth.  arg: Pointer to uint32_t, in Hz.
+       *
+       * NOTE: unlike the sx126x driver, this requires an EXACT match to a
+       * bandwidth the SX1276 supports; there is no nearest-match fallback.
+       * SSLink relies on the requested occupied bandwidth actually
+       * reaching the chip for regulatory reasons (see the sslink driver's
+       * PLAN-phy-frame-size.md), so a mistyped value must fail loudly
+       * rather than silently round to a different bandwidth.
+       */
+
+      case WLIOC_LORA_SETBW:
+        {
+          FAR uint32_t *ptr = (FAR uint32_t *)((uintptr_t)arg);
+          int bw;
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          bw = sx127x_lora_bw_from_hz(*ptr);
+          if (bw < 0)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          ret = sx127x_lora_bw_set(dev, (uint8_t)bw);
+          break;
+        }
+
+      /* Get LORA bandwidth.  arg: Pointer to uint32_t, in Hz */
+
+      case WLIOC_LORA_GETBW:
+        {
+          FAR uint32_t *ptr = (FAR uint32_t *)((uintptr_t)arg);
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          *ptr = sx127x_lora_bw_to_hz(dev->lora.bw);
+          break;
+        }
+
+      /* Set LORA coding rate.  arg: Pointer to enum wlioc_lora_cr_e.
+       *
+       * NOTE: enum wlioc_lora_cr_e (WLIOC_LORA_CR_4_5..4_8) and
+       * enum sx127x_lora_cr_e (LORA_CR_4d5..4d8) are numerically identical
+       * (1..4), so the value is used directly with no mapping table.
+       */
+
+      case WLIOC_LORA_SETCR:
+        {
+          FAR enum wlioc_lora_cr_e *ptr =
+            (FAR enum wlioc_lora_cr_e *)((uintptr_t)arg);
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL ||
+              *ptr < WLIOC_LORA_CR_4_5 || *ptr > WLIOC_LORA_CR_4_8)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          ret = sx127x_lora_cr_set(dev, (uint8_t)*ptr);
+          break;
+        }
+
+      /* Get LORA coding rate.  arg: Pointer to enum wlioc_lora_cr_e */
+
+      case WLIOC_LORA_GETCR:
+        {
+          FAR enum wlioc_lora_cr_e *ptr =
+            (FAR enum wlioc_lora_cr_e *)((uintptr_t)arg);
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          *ptr = (enum wlioc_lora_cr_e)dev->lora.cr;
+          break;
+        }
+
+      /* Set LORA CRC.  arg: Pointer to uint8_t, 0 or 1 */
+
+      case WLIOC_LORA_SETCRC:
+        {
+          FAR uint8_t *ptr = (FAR uint8_t *)((uintptr_t)arg);
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          ret = sx127x_lora_crc_set(dev, *ptr != 0);
+          break;
+        }
+
+      /* Get LORA CRC.  arg: Pointer to uint8_t */
+
+      case WLIOC_LORA_GETCRC:
+        {
+          FAR uint8_t *ptr = (FAR uint8_t *)((uintptr_t)arg);
+
+          if (dev->modulation != SX127X_MODULATION_LORA || ptr == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          *ptr = dev->crcon ? 1 : 0;
+          break;
+        }
+#endif /* CONFIG_LPWAN_SX127X_LORA */
+
       /* Get RSSI */
 
       case SX127XIOC_RSSIGET:
@@ -1154,12 +1316,26 @@ static int sx127x_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           break;
         }
 
-      /* SyncWord set */
+      /* SyncWord set.  arg: Pointer to struct wlioc_lora_syncword_s.
+       *
+       * NOTE: this case used to unconditionally PANIC() -- it was never
+       * finished.  sslink's shim now depends on this command (there is no
+       * WLIOC_LORA_SETSYNCWORD case in this driver), so it has to work.
+       */
 
       case SX127XIOC_SYNCWORDSET:
         {
-          PANIC();
-          sx127x_syncword_set(dev, NULL, 0);
+          FAR struct wlioc_lora_syncword_s *ptr =
+            (FAR struct wlioc_lora_syncword_s *)((uintptr_t)arg);
+
+          if (ptr == NULL || ptr->syncword == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          ret = sx127x_syncword_set(dev, ptr->syncword,
+                                    (uint8_t)ptr->syncword_length);
           break;
         }
 
@@ -3068,6 +3244,7 @@ static int sx127x_lora_bw_set(FAR struct sx127x_dev_s *dev, uint8_t bw)
       case LORA_BANDWIDTH_62P5KHZ:
       case LORA_BANDWIDTH_125KHZ:
       case LORA_BANDWIDTH_250KHZ:
+      case LORA_BANDWIDTH_500KHZ:
         {
           /* Lock SPI */
 
@@ -3092,6 +3269,71 @@ static int sx127x_lora_bw_set(FAR struct sx127x_dev_s *dev, uint8_t bw)
 
   dev->lora.bw = bw;
   return OK;
+}
+
+/****************************************************************************
+ * Name: sx127x_lora_bw_to_hz
+ *
+ * Description:
+ *   Convert a register-level sx127x_lora_bw_e value to Hz.
+ *
+ ****************************************************************************/
+
+static uint32_t sx127x_lora_bw_to_hz(uint8_t bw)
+{
+  /* Nominal LORA bandwidths, indexed by the enum's register value. */
+
+  static const uint32_t bw_hz[] =
+  {
+    7800,    /* LORA_BANDWIDTH_7P8KHZ */
+    10400,   /* LORA_BANDWIDTH_10P4KHZ */
+    15600,   /* LORA_BANDWIDTH_15P6KHZ */
+    20800,   /* LORA_BANDWIDTH_20P8KHZ */
+    31250,   /* LORA_BANDWIDTH_31P2KHZ */
+    41700,   /* LORA_BANDWIDTH_41P4KHZ */
+    62500,   /* LORA_BANDWIDTH_62P5KHZ */
+    125000,  /* LORA_BANDWIDTH_125KHZ */
+    250000,  /* LORA_BANDWIDTH_250KHZ */
+    500000   /* LORA_BANDWIDTH_500KHZ */
+  };
+
+  if (bw >= sizeof(bw_hz) / sizeof(bw_hz[0]))
+    {
+      return 0;
+    }
+
+  return bw_hz[bw];
+}
+
+/****************************************************************************
+ * Name: sx127x_lora_bw_from_hz
+ *
+ * Description:
+ *   Convert a bandwidth in Hz to a register-level sx127x_lora_bw_e value.
+ *   Unlike the sx126x driver's nearest-match helper, this requires an
+ *   EXACT match: SSLink's compliance argument rests on the occupied
+ *   bandwidth actually reaching the chip, so a mistyped value must be
+ *   rejected rather than silently rounded to a different bandwidth.
+ *
+ * Returned Value:
+ *   A LORA_BANDWIDTH_* value on success, -EINVAL if hz does not exactly
+ *   match a supported bandwidth.
+ *
+ ****************************************************************************/
+
+static int sx127x_lora_bw_from_hz(uint32_t hz)
+{
+  uint8_t bw;
+
+  for (bw = LORA_BANDWIDTH_7P8KHZ; bw <= LORA_BANDWIDTH_500KHZ; bw++)
+    {
+      if (sx127x_lora_bw_to_hz(bw) == hz)
+        {
+          return bw;
+        }
+    }
+
+  return -EINVAL;
 }
 
 /****************************************************************************
@@ -3163,6 +3405,12 @@ static int sx127x_lora_sf_set(FAR struct sx127x_dev_s *dev, uint8_t sf)
   uint8_t setbits = 0;
   uint8_t clrbits = 0;
 
+  if (sf < LORA_SF_6 || sf > LORA_SF_12)
+    {
+      wlerr("Unsupported SF %d\n", sf);
+      return -EINVAL;
+    }
+
   if (dev->lora.sf == sf)
     {
       return OK;
@@ -3172,11 +3420,15 @@ static int sx127x_lora_sf_set(FAR struct sx127x_dev_s *dev, uint8_t sf)
    *   - implicit header mode ON
    *   - Detection optimize for SF6
    *   - Detection threshold for SF6
+   *
+   * NOTE: this must test the *requested* sf, not dev->lora.sf (the value
+   * being replaced) -- otherwise the implicit-header requirement is
+   * checked against the old SF instead of the new one.
    */
 
-  if (dev->lora.sf == 6)
+  if (sf == LORA_SF_6)
     {
-      if (dev->lora.implicthdr == true)
+      if (dev->lora.implicthdr == false)
         {
           wlerr("SF6 needs implicit header ON!\n");
           return -EINVAL;
@@ -3258,6 +3510,47 @@ static int sx127x_lora_implicthdr_set(FAR struct sx127x_dev_s *dev,
 }
 
 /****************************************************************************
+ * Name: sx127x_lora_crc_set
+ *
+ * Description:
+ *   Configure LORA CRC (RX) and clear continuous TX mode.  This was
+ *   formerly inline in sx127x_lora_init(); it is now also reachable
+ *   through WLIOC_LORA_SETCRC, so it has to stand on its own.
+ *
+ ****************************************************************************/
+
+static int sx127x_lora_crc_set(FAR struct sx127x_dev_s *dev, bool crcon)
+{
+  DEBUGASSERT(dev->modulation == SX127X_MODULATION_LORA);
+
+  uint8_t setbits = 0;
+  uint8_t clrbits = 0;
+
+  /* Lock SPI */
+
+  sx127x_lock(dev->spi);
+
+  /* Modem PHY config 2:
+   *   - RXCRCON
+   *     NOTE: this works differently for implicit header and explicit header
+   *   - packet mode
+   */
+
+  setbits = (crcon == true ? SX127X_LRM_MDMCFG2_RXCRCON : 0);
+  clrbits = (SX127X_LRM_MDMCFG2_TXCONT | SX127X_LRM_MDMCFG2_RXCRCON);
+  sx127x_modregbyte(dev, SX127X_LRM_MDMCFG2, setbits, clrbits);
+
+  /* Unlock SPI */
+
+  sx127x_unlock(dev->spi);
+
+  /* Update local variable */
+
+  dev->crcon = crcon;
+  return OK;
+}
+
+/****************************************************************************
  * Name: sx127x_lora_init
  *
  * Description:
@@ -3297,6 +3590,10 @@ static void sx127x_lora_init(FAR struct sx127x_dev_s *dev)
 
   sx127x_lora_implicthdr_set(dev, CONFIG_LPWAN_SX127X_LORA_IMPHEADER);
 
+  /* Configure CRC (also clears continuous TX mode) */
+
+  sx127x_lora_crc_set(dev, dev->crcon);
+
   /* Lock SPI */
 
   sx127x_lock(dev->spi);
@@ -3305,16 +3602,6 @@ static void sx127x_lora_init(FAR struct sx127x_dev_s *dev)
 
   sx127x_writeregbyte(dev, SX127X_LRM_PAYLOADMAX,
                       SX127X_LRM_PAYLOADMAX_DEFAULT);
-
-  /* Modem PHY config 2:
-   *   - RXCRCON
-   *     NOTE: this works differently for implicit header and explicit header
-   *   - packet mode
-   */
-
-  setbits = (dev->crcon == true ? SX127X_LRM_MDMCFG2_RXCRCON : 0);
-  clrbits = (SX127X_LRM_MDMCFG2_TXCONT | SX127X_LRM_MDMCFG2_RXCRCON);
-  sx127x_modregbyte(dev, SX127X_LRM_MDMCFG2, setbits, clrbits);
 
   /* Invert I and Q signals if configured */
 

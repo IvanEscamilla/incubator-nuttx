@@ -48,6 +48,7 @@ config LPWAN_SX127X_RXFIFO_LEN
 
 config LPWAN_SX127X_RXFIFO_DATA_LEN
 	int "SX127X RX FIFO data length"
+	default 255 if !LPWAN_SX127X_FSKOOK
 	default 64
 
 config LPWAN_SX127X_RX_TIMEOUT

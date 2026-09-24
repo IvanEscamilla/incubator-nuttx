@@ -277,7 +277,7 @@
 /* See include/nuttx/wireless/lpwan/sx126x.h */
 
 #define SX126X_FIRST        (SX127X_FIRST + SX127X_NCMDS)
-#define SX126X_NCMDS        11
+#define SX126X_NCMDS        32
 
 /* See include/nuttx/wireless/gs2200m.h */
 
@@ -288,6 +288,11 @@
 
 #define CC1101_FIRST        (GS2200M_FIRST + GS2200M_NCMDS)
 #define CC1101_NCMDS        2
+
+/* See include/nuttx/wireless/lpwan/sslink.h */
+
+#define SSLINK_FIRST        (CC1101_FIRST + CC1101_NCMDS)
+#define SSLINK_NCMDS        48
 
 /****************************************************************************
  * Public Types
