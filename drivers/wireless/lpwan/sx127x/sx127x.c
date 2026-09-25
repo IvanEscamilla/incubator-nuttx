@@ -774,6 +774,42 @@ static void sx127x_reset(FAR struct sx127x_dev_s *dev)
 }
 
 /****************************************************************************
+ * Name: sx127x_cache_invalidate
+ *
+ * Description:
+ *   Forget the register values cached in dev.  A reset returns every
+ *   register to its default, but the setters skip the write when the
+ *   requested value matches the cached one, so after a re-open the chip
+ *   stayed at the 434 MHz reset frequency, on the RFO output, with its
+ *   image calibrated at 434 MHz, while the driver reported 915 MHz.
+ *
+ ****************************************************************************/
+
+static void sx127x_cache_invalidate(FAR struct sx127x_dev_s *dev)
+{
+  dev->freq  = 0;
+  dev->power = INT8_MIN;
+
+#ifdef CONFIG_LPWAN_SX127X_FSKOOK
+  dev->fskook.bitrate = 0;
+  dev->fskook.fdev    = 0;
+  dev->fskook.rx_bw   = UINT8_MAX;
+  dev->fskook.afc_bw  = UINT8_MAX;
+#endif
+
+#ifdef CONFIG_LPWAN_SX127X_LORA
+  /* 0 is not a valid SF or CR.  The header and IQ flags go back to the
+   * chip defaults; the BW is always written.
+   */
+
+  dev->lora.sf         = 0;
+  dev->lora.cr         = 0;
+  dev->lora.implicthdr = false;
+  dev->lora.invert_iq  = false;
+#endif
+}
+
+/****************************************************************************
  * Name: sx127x_open
  *
  * Description:
@@ -908,6 +944,11 @@ static ssize_t sx127x_read(FAR struct file *filep, FAR char *buffer,
 
   if (ret < 0)
     {
+      /* Interrupted by a signal: release the device, or every later
+       * open, ioctl and write blocks on dev_lock forever.
+       */
+
+      nxmutex_unlock(&dev->dev_lock);
       return ret;
     }
 
@@ -4598,6 +4639,7 @@ static int sx127x_init(FAR struct sx127x_dev_s *dev)
   /* Reset radio */
 
   sx127x_reset(dev);
+  sx127x_cache_invalidate(dev);
 
   /* Get initial modem state */
 
