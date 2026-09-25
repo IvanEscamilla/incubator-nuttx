@@ -150,8 +150,10 @@
 #define SX127X_LRM_RSSIWIDEBAND           0x2c /* LORA: Wideband RSSI measurement */
 #define SX127X_LRM_DETECTOPT              0x31 /* LORA: LORA detection optimize for SF6 */
 #define SX127X_LRM_INVERTIQ               0x33 /* LORA: Invert LORA I and Q signals */
+#define SX127X_LRM_HIGHBWOPT1             0x36 /* LORA: 500 kHz sensitivity optimisation 1 (errata 2.1) */
 #define SX127X_LRM_DETECTTHR              0x37 /* LORA: LORA detection threshold for SF6 */
 #define SX127X_LRM_SYNCWORD               0x39 /* LORA: LORA Sync Word */
+#define SX127X_LRM_HIGHBWOPT2             0x3a /* LORA: 500 kHz sensitivity optimisation 2 (errata 2.1) */
 
 /* Common *******************************************************************/
 
@@ -778,6 +780,14 @@
 #define SX127X_LRM_DETECTOPT_DO_MASK      (7 << SX127X_LRM_DETECTOPT_DO_SHIFT)
 #  define SX127X_LRM_DETECTOPT_DO_SF7SF12 (3 << SX127X_LRM_DETECTOPT_DO_SHIFT) /* 0x03: SF7 to SF12 */
 #  define SX127X_LRM_DETECTOPT_DO_SF6     (5 << SX127X_LRM_DETECTOPT_DO_SHIFT) /* 0x05: SF6 */
+#define SX127X_LRM_DETECTOPT_AUTOIF       (1 << 7) /* Bit 7: Automatic IF, on at 500 kHz (errata 2.3) */
+
+/* LORA: 500 kHz sensitivity optimisation (SX1276/77/78/79 errata 2.1) */
+
+#define SX127X_LRM_HIGHBWOPT1_500KHZ      (0x02)   /* BW 500 kHz */
+#define SX127X_LRM_HIGHBWOPT1_DEFAULT     (0x03)   /* Every other BW */
+#define SX127X_LRM_HIGHBWOPT2_500KHZ_HF   (0x64)   /* BW 500 kHz, 862-1020 MHz */
+#define SX127X_LRM_HIGHBWOPT2_500KHZ_LF   (0x7f)   /* BW 500 kHz, 410-525 MHz */
 
 /* LORA: Invert LORA I and Q signals */
 

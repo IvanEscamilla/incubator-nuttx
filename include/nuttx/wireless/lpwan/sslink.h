@@ -89,6 +89,12 @@
 
 #define SSLINK_EUI_LEN            8
 #define SSLINK_ADDR_BROADCAST     0xffffffffu
+
+/* net_id of a JOIN_REQ from a node that does not know its gateway yet.
+ * Never a gateway's own net_id.
+ */
+
+#define SSLINK_NET_ID_ANY         0xffffu
 #define SSLINK_OTA_PATH_MAX       64
 
 /* Message types (first byte of the encrypted payload) **********************/

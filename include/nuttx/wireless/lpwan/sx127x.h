@@ -77,7 +77,10 @@
 #define SX127XIOC_PREAMBLESET   _WLCIOC(SX127X_FIRST+6)
 #define SX127XIOC_PREAMBLEGET   _WLCIOC(SX127X_FIRST+7)
 
-/* arg: Pointer to struct sx127x_syncword_ioc_s */
+/* arg: Pointer to struct wlioc_lora_syncword_s.  For GET, syncword_length
+ * is the buffer capacity on entry and the sync word length on return
+ * (-ENOBUFS if the buffer is too small).
+ */
 
 #define SX127XIOC_SYNCWORDSET   _WLCIOC(SX127X_FIRST+8)
 #define SX127XIOC_SYNCWORDGET   _WLCIOC(SX127X_FIRST+9)

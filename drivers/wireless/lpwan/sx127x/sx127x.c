@@ -224,13 +224,15 @@ struct sx127x_priv_ops_s
 
   /* Set sync word */
 
-  CODE int (*syncword_set)(FAR struct sx127x_dev_s *dev, FAR uint8_t *sw,
-                           uint8_t len);
+  CODE int (*syncword_set)(FAR struct sx127x_dev_s *dev,
+                           FAR const uint8_t *sw, size_t len);
 
-  /* Get sync word */
+  /* Get sync word.  *len is the capacity of sw on entry and the sync word
+   * length on return.
+   */
 
-  CODE void (*syncword_get)(FAR struct sx127x_dev_s *dev, FAR uint8_t *sw,
-                            FAR uint8_t *len);
+  CODE int (*syncword_get)(FAR struct sx127x_dev_s *dev, FAR uint8_t *sw,
+                           FAR size_t *len);
 
 #ifdef CONFIG_LPWAN_SX127X_TXSUPPORT
   /* Send packet */
@@ -365,9 +367,10 @@ static int sx127x_lora_opmode_set(FAR struct sx127x_dev_s *dev,
 static int sx127x_lora_opmode_init(FAR struct sx127x_dev_s *dev,
                                    uint8_t opmode);
 static int sx127x_lora_syncword_set(FAR struct sx127x_dev_s *dev,
-                                    FAR uint8_t *sw, uint8_t len);
-static void sx127x_lora_syncword_get(FAR struct sx127x_dev_s *dev,
-                                     FAR uint8_t *sw, uint8_t *len);
+                                    FAR const uint8_t *sw, size_t len);
+static int sx127x_lora_syncword_get(FAR struct sx127x_dev_s *dev,
+                                    FAR uint8_t *sw, FAR size_t *len);
+static void sx127x_lora_bwopt_set(FAR struct sx127x_dev_s *dev);
 static int sx127x_lora_bw_set(FAR struct sx127x_dev_s *dev, uint8_t bw);
 static int sx127x_lora_cr_set(FAR struct sx127x_dev_s *dev, uint8_t cr);
 static int sx127x_lora_sf_set(FAR struct sx127x_dev_s *dev, uint8_t sf);
@@ -405,9 +408,9 @@ static int sx127x_fskook_preamble_get(FAR struct sx127x_dev_s *dev);
 static int sx127x_fskook_opmode_init(FAR struct sx127x_dev_s *dev,
                                      uint8_t opmode);
 static int sx127x_fskook_syncword_set(FAR struct sx127x_dev_s *dev,
-                                      FAR uint8_t *sw, uint8_t len);
-static void sx127x_fskook_syncword_get(FAR struct sx127x_dev_s *dev,
-                                       FAR uint8_t *sw, FAR uint8_t *len);
+                                      FAR const uint8_t *sw, size_t len);
+static int sx127x_fskook_syncword_get(FAR struct sx127x_dev_s *dev,
+                                      FAR uint8_t *sw, FAR size_t *len);
 #  ifdef CONFIG_LPWAN_SX127X_RXSUPPORT
 static size_t sx127x_fskook_rxhandle(FAR struct sx127x_dev_s *dev);
 #  endif
@@ -445,9 +448,9 @@ static int sx127x_opmode_set(FAR struct sx127x_dev_s *dev, uint8_t opmode);
 static uint8_t sx127x_opmode_get(FAR struct sx127x_dev_s *dev);
 static int sx127x_opmode_init(FAR struct sx127x_dev_s *dev, uint8_t opmode);
 static int sx127x_syncword_set(FAR struct sx127x_dev_s *dev,
-                               FAR uint8_t *sw, uint8_t len);
-static void sx127x_syncword_get(FAR struct sx127x_dev_s *dev,
-                                FAR uint8_t *sw, FAR uint8_t *len);
+                               FAR const uint8_t *sw, size_t len);
+static int sx127x_syncword_get(FAR struct sx127x_dev_s *dev,
+                               FAR uint8_t *sw, FAR size_t *len);
 #ifdef CONFIG_DEBUG_WIRELESS_INFO
 static void sx127x_dumpregs(FAR struct sx127x_dev_s *dev);
 #else
@@ -1335,16 +1338,28 @@ static int sx127x_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
             }
 
           ret = sx127x_syncword_set(dev, ptr->syncword,
-                                    (uint8_t)ptr->syncword_length);
+                                    ptr->syncword_length);
           break;
         }
 
-      /* SyncWord get */
+      /* SyncWord get.  arg: Pointer to struct wlioc_lora_syncword_s.
+       * syncword_length is the capacity of syncword on entry and the sync
+       * word length on return; -ENOBUFS if the buffer is too small.
+       */
 
       case SX127XIOC_SYNCWORDGET:
         {
-          PANIC();
-          sx127x_syncword_get(dev, NULL, 0);
+          FAR struct wlioc_lora_syncword_s *ptr =
+            (FAR struct wlioc_lora_syncword_s *)((uintptr_t)arg);
+
+          if (ptr == NULL || ptr->syncword == NULL)
+            {
+              ret = -EINVAL;
+              break;
+            }
+
+          ret = sx127x_syncword_get(dev, ptr->syncword,
+                                    &ptr->syncword_length);
           break;
         }
 
@@ -2655,13 +2670,49 @@ static int sx127x_fskook_seq_init(FAR struct sx127x_dev_s *dev)
  * Name: sx127x_fskook_syncword_get
  ****************************************************************************/
 
-static void sx127x_fskook_syncword_get(FAR struct sx127x_dev_s *dev,
-                                       FAR uint8_t *sw, FAR uint8_t *len)
+static int sx127x_fskook_syncword_get(FAR struct sx127x_dev_s *dev,
+                                      FAR uint8_t *sw, FAR size_t *len)
 {
   DEBUGASSERT(dev->modulation == SX127X_MODULATION_FSK ||
               dev->modulation == SX127X_MODULATION_OOK);
 
-  wlerr("sx127x_fskook_syncword_get not implemented yet\n");
+  uint8_t cfg;
+  size_t  n;
+  size_t  i;
+
+  /* Lock SPI */
+
+  sx127x_lock(dev->spi);
+
+  cfg = sx127x_readregbyte(dev, SX127X_FOM_SYNCCFG);
+
+  /* SyncSize holds the length minus one; SyncOn off means no sync word */
+
+  n = 0;
+  if ((cfg & SX127X_FOM_SYNCCFG_SYNCON) != 0)
+    {
+      n = ((cfg & SX127X_FOM_SYNCCFG_SYNCSIZE_MASK) >>
+           SX127X_FOM_SYNCCFG_SYNCSIZE_SHIFT) + 1;
+    }
+
+  if (n > *len)
+    {
+      sx127x_unlock(dev->spi);
+      *len = n;
+      return -ENOBUFS;
+    }
+
+  for (i = 0; i < n; i++)
+    {
+      sw[i] = sx127x_readregbyte(dev, SX127X_FOM_SYNCVAL1 + i);
+    }
+
+  /* Unlock SPI */
+
+  sx127x_unlock(dev->spi);
+
+  *len = n;
+  return OK;
 }
 
 /****************************************************************************
@@ -2673,7 +2724,7 @@ static void sx127x_fskook_syncword_get(FAR struct sx127x_dev_s *dev,
  ****************************************************************************/
 
 static int sx127x_fskook_syncword_set(FAR struct sx127x_dev_s *dev,
-                                      FAR uint8_t *sw, uint8_t len)
+                                      FAR const uint8_t *sw, size_t len)
 {
   DEBUGASSERT(dev->modulation == SX127X_MODULATION_FSK ||
               dev->modulation == SX127X_MODULATION_OOK);
@@ -2685,7 +2736,7 @@ static int sx127x_fskook_syncword_set(FAR struct sx127x_dev_s *dev,
 
   if (len > SX127X_FOM_SYNCSIZE_MAX)
     {
-      wlerr("Unsupported sync word length %d!", len);
+      wlerr("Unsupported sync word length %zu!\n", len);
       return -EINVAL;
     }
 
@@ -3171,13 +3222,31 @@ errout:
  * Name: sx127x_lora_syncword_get
  ****************************************************************************/
 
-static void sx127x_lora_syncword_get(FAR struct sx127x_dev_s *dev,
-                                     FAR uint8_t *sw, FAR uint8_t *len)
+static int sx127x_lora_syncword_get(FAR struct sx127x_dev_s *dev,
+                                    FAR uint8_t *sw, FAR size_t *len)
 {
-  DEBUGASSERT(dev->modulation == SX127X_MODULATION_FSK ||
-              dev->modulation == SX127X_MODULATION_OOK);
+  DEBUGASSERT(dev->modulation == SX127X_MODULATION_LORA);
 
-  wlerr("sx127x_lora_syncword_get not implemented yet\n");
+  /* LORA has a single sync word byte */
+
+  if (*len < 1)
+    {
+      *len = 1;
+      return -ENOBUFS;
+    }
+
+  /* Lock SPI */
+
+  sx127x_lock(dev->spi);
+
+  sw[0] = sx127x_readregbyte(dev, SX127X_LRM_SYNCWORD);
+
+  /* Unlock SPI */
+
+  sx127x_unlock(dev->spi);
+
+  *len = 1;
+  return OK;
 }
 
 /****************************************************************************
@@ -3189,13 +3258,13 @@ static void sx127x_lora_syncword_get(FAR struct sx127x_dev_s *dev,
  ****************************************************************************/
 
 static int sx127x_lora_syncword_set(FAR struct sx127x_dev_s *dev,
-                                    FAR uint8_t *sw, uint8_t len)
+                                    FAR const uint8_t *sw, size_t len)
 {
   DEBUGASSERT(dev->modulation == SX127X_MODULATION_LORA);
 
   if (len != 1)
     {
-      wlerr("LORA support sync word with len = 1 but len = %d\n", len);
+      wlerr("LORA support sync word with len = 1 but len = %zu\n", len);
       return -EINVAL;
     }
 
@@ -3214,6 +3283,44 @@ static int sx127x_lora_syncword_set(FAR struct sx127x_dev_s *dev,
 }
 
 /****************************************************************************
+ * Name: sx127x_lora_bwopt_set
+ *
+ * Description:
+ *   Apply the SX1276/77/78/79 errata that depend on the bandwidth:
+ *     2.1 Sensitivity optimisation with a 500 kHz bandwidth: registers
+ *         0x36 and 0x3a take band-specific values at 500 kHz, and 0x36
+ *         must be 0x03 at every other bandwidth.
+ *     2.3 Receiver spurious reception: at 500 kHz the automatic IF
+ *         (RegDetectOptimize bit 7) must be on.  Below 500 kHz it stays
+ *         off, as this driver has always left it.
+ *   The values depend on the carrier too, so this runs whenever the
+ *   bandwidth or the frequency changes.  The caller holds the SPI lock.
+ *
+ ****************************************************************************/
+
+static void sx127x_lora_bwopt_set(FAR struct sx127x_dev_s *dev)
+{
+  if (dev->lora.bw == LORA_BANDWIDTH_500KHZ)
+    {
+      sx127x_writeregbyte(dev, SX127X_LRM_HIGHBWOPT1,
+                          SX127X_LRM_HIGHBWOPT1_500KHZ);
+      sx127x_writeregbyte(dev, SX127X_LRM_HIGHBWOPT2,
+                          dev->freq > SX127X_HFBAND_THR ?
+                          SX127X_LRM_HIGHBWOPT2_500KHZ_HF :
+                          SX127X_LRM_HIGHBWOPT2_500KHZ_LF);
+      sx127x_modregbyte(dev, SX127X_LRM_DETECTOPT,
+                        SX127X_LRM_DETECTOPT_AUTOIF, 0);
+    }
+  else
+    {
+      sx127x_writeregbyte(dev, SX127X_LRM_HIGHBWOPT1,
+                          SX127X_LRM_HIGHBWOPT1_DEFAULT);
+      sx127x_modregbyte(dev, SX127X_LRM_DETECTOPT,
+                        0, SX127X_LRM_DETECTOPT_AUTOIF);
+    }
+}
+
+/****************************************************************************
  * Name: sx127x_lora_bw_set
  *
  * Description:
@@ -3228,10 +3335,12 @@ static int sx127x_lora_bw_set(FAR struct sx127x_dev_s *dev, uint8_t bw)
   uint8_t clrbits = 0;
   uint8_t setbits = 0;
 
-  if (bw == dev->lora.bw)
-    {
-      return OK;
-    }
+  /* No "unchanged, skip" shortcut here: dev->lora.bw starts zeroed, which
+   * is LORA_BANDWIDTH_7P8KHZ, the same value as SX127X_LRM_BW_DEFAULT, so
+   * the first sx127x_lora_init() would never program the register and the
+   * chip would stay at its 125 kHz reset value while GETBW reported
+   * 7.8 kHz.  A modulation switch leaves the shadow stale the same way.
+   */
 
   switch (bw)
     {
@@ -3254,6 +3363,9 @@ static int sx127x_lora_bw_set(FAR struct sx127x_dev_s *dev, uint8_t bw)
           clrbits = SX127X_LRM_MDMCFG1_BW_MASK;
           sx127x_modregbyte(dev, SX127X_LRM_MDMCFG1, setbits, clrbits);
 
+          dev->lora.bw = bw;
+          sx127x_lora_bwopt_set(dev);
+
           /* Unlock SPI */
 
           sx127x_unlock(dev->spi);
@@ -3267,7 +3379,6 @@ static int sx127x_lora_bw_set(FAR struct sx127x_dev_s *dev, uint8_t bw)
         }
     }
 
-  dev->lora.bw = bw;
   return OK;
 }
 
@@ -3447,6 +3558,13 @@ static int sx127x_lora_sf_set(FAR struct sx127x_dev_s *dev, uint8_t sf)
   clrbits = SX127X_LRM_MDMCFG2_SPRFACT_MASK;
   setbits = (sf << SX127X_LRM_MDMCFG2_SPRFACT_SHIFT);
   sx127x_modregbyte(dev, SX127X_LRM_MDMCFG2, setbits, clrbits);
+
+  /* Bit 7 (automatic IF) belongs to sx127x_lora_bwopt_set() */
+
+  if (dev->lora.bw == LORA_BANDWIDTH_500KHZ)
+    {
+      dopt |= SX127X_LRM_DETECTOPT_AUTOIF;
+    }
 
   sx127x_writeregbyte(dev, SX127X_LRM_DETECTOPT, dopt);
   sx127x_writeregbyte(dev, SX127X_LRM_DETECTTHR, dthr);
@@ -3790,10 +3908,10 @@ static int sx127x_lora_preamble_get(FAR struct sx127x_dev_s *dev)
  * Name: sx127x_syncword_get
  ****************************************************************************/
 
-static void sx127x_syncword_get(FAR struct sx127x_dev_s *dev,
-                                FAR uint8_t *sw, FAR uint8_t *len)
+static int sx127x_syncword_get(FAR struct sx127x_dev_s *dev,
+                               FAR uint8_t *sw, FAR size_t *len)
 {
-  dev->ops.syncword_get(dev, sw, len);
+  return dev->ops.syncword_get(dev, sw, len);
 }
 
 /****************************************************************************
@@ -3801,7 +3919,7 @@ static void sx127x_syncword_get(FAR struct sx127x_dev_s *dev,
  ****************************************************************************/
 
 static int sx127x_syncword_set(FAR struct sx127x_dev_s *dev,
-                               FAR uint8_t *sw, uint8_t len)
+                               FAR const uint8_t *sw, size_t len)
 {
   return dev->ops.syncword_set(dev, sw, len);
 }
@@ -4169,6 +4287,17 @@ static int sx127x_frequency_set(FAR struct sx127x_dev_s *dev, uint32_t freq)
   /* Update local variable */
 
   dev->freq = freq;
+
+#ifdef CONFIG_LPWAN_SX127X_LORA
+  /* The 500 kHz errata values differ between the LF and HF bands */
+
+  if (dev->modulation == SX127X_MODULATION_LORA)
+    {
+      sx127x_lock(dev->spi);
+      sx127x_lora_bwopt_set(dev);
+      sx127x_unlock(dev->spi);
+    }
+#endif
 
   /* Call board-specific LF/HF configuration */
 
