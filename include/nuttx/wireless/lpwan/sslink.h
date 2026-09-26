@@ -212,6 +212,16 @@
 #define SSLINKIOC_DEVMODE         _SSLINKIOC(25) /* arg: const struct sslink_devmode_s * */
 #define SSLINKIOC_SET_WAKE_POLICY _SSLINKIOC(26) /* arg: const struct sslink_wake_policy_s * */
 #define SSLINKIOC_OTA_CONFIRM     _SSLINKIOC(27) /* arg: none */
+#define SSLINKIOC_RESUME          _SSLINKIOC(28) /* arg: uint32_t timeout_ms
+                                                  * (value).  Blocks, like
+                                                  * PAIR.  Re-derives the
+                                                  * session keys from master
+                                                  * with no installer
+                                                  * (SPEC-handshake.md 5.1).
+                                                  * 0, -ETIMEDOUT,
+                                                  * -ECONNREFUSED, or
+                                                  * -ENOTCONN when no master
+                                                  * is stored */
 
 /* Gateway role */
 
@@ -292,7 +302,9 @@ enum sslink_evt_e
 {
   SSLINK_EVT_MSG = 0,         /* data: message payload of msg_type */
   SSLINK_EVT_TX_DONE,         /* data: struct sslink_txdone_s */
-  SSLINK_EVT_PAIRED,          /* data: struct sslink_paired_s */
+  SSLINK_EVT_PAIRED,          /* data: struct sslink_paired_s.  Also posted
+                               * when a session is resumed (5.1), with
+                               * resumed = 1 */
   SSLINK_EVT_PAIR_REJECTED,   /* data: struct sslink_paired_s */
   SSLINK_EVT_UNPAIRED,        /* no data */
   SSLINK_EVT_DEV_ONLINE,      /* gateway, no data */
@@ -577,6 +589,7 @@ struct sslink_paired_s
   uint8_t  eui[SSLINK_EUI_LEN];
   uint8_t  dev_type;
   uint8_t  reason;            /* rejected only */
+  uint8_t  resumed;           /* 1: resumption, not enrollment (5.1) */
 };
 
 /* An EUI passed by pointer (SSLINKIOC_CAND_CONFIRM / CAND_REJECT) */
