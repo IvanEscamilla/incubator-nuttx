@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <poll.h>
+#include <nuttx/arch.h>
 #include <nuttx/debug.h>
 #include <time.h>
 #include <fcntl.h>
@@ -2319,13 +2320,15 @@ static int sx127x_opmode_set(FAR struct sx127x_dev_s *dev, uint8_t opmode)
     }
 #endif
 
-  /* Change mode */
-
-  dev->ops.opmode_set(dev, opmode);
-
-  /* Update local variable */
+  /* Record the new mode before the chip enters it.  The DIO0 handler
+   * dispatches on dev->opmode, and a short frame can finish transmitting
+   * before ops.opmode_set() returns: its TXDONE would then be read as
+   * belonging to the old mode and dropped, and write() would wait for it
+   * forever.
+   */
 
   dev->opmode = opmode;
+  dev->ops.opmode_set(dev, opmode);
   return ret;
 }
 
@@ -3250,9 +3253,12 @@ static int sx127x_lora_opmode_set(FAR struct sx127x_dev_s *dev,
                     ((opmode - 1) << SX127X_CMN_OPMODE_MODE_SHIFT),
                     SX127X_CMN_OPMODE_MODE_MASK);
 
-  /* Wait for mode ready. REVISIT: do we need this ? */
+  /* Wait for mode ready.  REVISIT: do we need this ?  A busy wait: a
+   * sleep lasts at least a whole tick (10 ms by default), during which a
+   * short frame is already on air and done, with the SPI lock held.
+   */
 
-  nxsched_usleep(250);
+  up_udelay(250);
 
 errout:
   sx127x_unlock(dev->spi);
