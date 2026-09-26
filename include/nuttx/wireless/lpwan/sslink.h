@@ -101,6 +101,8 @@
 
 /* 0x00-0x1f: system messages */
 
+#define SSLINK_MSG_MAC_ACK            0x00  /* down: struct sslink_ack_s, in an
+                                             * SSLINK_F_ACK frame (SPEC-mac.md) */
 #define SSLINK_MSG_DEVICE_INFO        0x01  /* up:   struct sslink_device_info_s */
 #define SSLINK_MSG_DIAG               0x02  /* up:   struct sslink_diag_s */
 
@@ -360,6 +362,15 @@ enum sslink_ota_state_e
 };
 
 /* Wire structs *************************************************************/
+
+/* SSLINK_MSG_MAC_ACK: the body of an ACK frame (SPEC-mac.md 1) */
+
+begin_packed_struct struct sslink_ack_s
+{
+  uint16_t acked_fcnt16;      /* fcnt16 of the frame acknowledged */
+  int16_t  rssi;              /* as the gateway measured that frame */
+  int8_t   snr;
+} end_packed_struct;
 
 /* SSLINK_MSG_TANK_LEVEL: gas and water tank sensors */
 
@@ -736,6 +747,7 @@ enum sslink_wake_e
 
 /* Wire struct sizes are part of the protocol */
 
+static_assert(sizeof(struct sslink_ack_s) == 5, "wire size");
 static_assert(sizeof(struct sslink_tank_level_s) == 24, "wire size");
 static_assert(sizeof(struct sslink_device_info_s) == 26, "wire size");
 static_assert(sizeof(struct sslink_diag_s) == 22, "wire size");
