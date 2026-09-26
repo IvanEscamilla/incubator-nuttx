@@ -227,6 +227,19 @@
 #define SSLINKIOC_OTA_STATUS      _SSLINKIOC(42) /* arg: struct sslink_ota_status_s *
                                                   * (dev_addr filled in) */
 
+/* Gateway pairing candidates: nodes heard in discovery that the installer
+ * has not yet confirmed (SPEC-handshake.md 4).  Confirm and reject take a
+ * pointer, since an EUI does not fit in an unsigned long on xtensa.
+ */
+
+#define SSLINKIOC_CAND_COUNT      _SSLINKIOC(43) /* arg: none. Returns the count */
+#define SSLINKIOC_CAND_LIST       _SSLINKIOC(44) /* arg: struct sslink_candlist_s * */
+#define SSLINKIOC_CAND_CONFIRM    _SSLINKIOC(45) /* arg: const struct sslink_eui_s *.
+                                                  * Answers with JOIN_RSP; the
+                                                  * outcome is SSLINK_EVT_PAIRED or
+                                                  * SSLINK_EVT_PAIR_REJECTED */
+#define SSLINKIOC_CAND_REJECT     _SSLINKIOC(46) /* arg: const struct sslink_eui_s * */
+
 /* Size helpers for read()/write() */
 
 #define SSLINK_EVENT_SIZE(n)      (offsetof(struct sslink_event_s, data) + (n))
@@ -286,6 +299,29 @@ enum sslink_evt_e
   SSLINK_EVT_DEVMODE,         /* data: struct sslink_devmode_s */
   SSLINK_EVT_OTA,             /* data: struct sslink_ota_evt_s */
   SSLINK_EVT_OVERFLOW,        /* this reader's queue dropped events */
+  SSLINK_EVT_CANDIDATE,       /* gateway, data: struct sslink_candidate_s.
+                               * A candidate was added or refreshed */
+};
+
+/* Why a pairing did not complete: struct sslink_paired_s.reason.  1..7
+ * are the NACK reasons on air (SPEC-handshake.md 4.1); a NACK is
+ * unauthenticated, so a node treats them as advice.  From 16 on they are
+ * local and never sent.
+ */
+
+enum sslink_join_reject_e
+{
+  SSLINK_REJECT_NONE          = 0,
+  SSLINK_REJECT_NOT_OPEN      = 1,  /* gateway not in discovery */
+  SSLINK_REJECT_WEAK_SIGNAL   = 2,  /* below CONFIG_SSLINK_PAIR_RSSI_MIN */
+  SSLINK_REJECT_BAD_FINISHED  = 3,
+  SSLINK_REJECT_UNKNOWN_DEV   = 4,  /* resumption failed */
+  SSLINK_REJECT_TABLE_FULL    = 5,  /* candidate or device table */
+  SSLINK_REJECT_MALFORMED     = 6,
+  SSLINK_REJECT_AUTH_VERSION  = 7,  /* unknown auth key version */
+  SSLINK_REJECT_TIMEOUT       = 16, /* window elapsed, no answer */
+  SSLINK_REJECT_NO_ACK        = 17, /* node: JOIN_CFM never acknowledged */
+  SSLINK_REJECT_BY_USER       = 18, /* gateway: installer rejected */
 };
 
 enum sslink_tank_kind_e
@@ -530,6 +566,32 @@ struct sslink_paired_s
   uint8_t  eui[SSLINK_EUI_LEN];
   uint8_t  dev_type;
   uint8_t  reason;            /* rejected only */
+};
+
+/* An EUI passed by pointer (SSLINKIOC_CAND_CONFIRM / CAND_REJECT) */
+
+struct sslink_eui_s
+{
+  uint8_t  eui[SSLINK_EUI_LEN];
+};
+
+/* SSLINK_EVT_CANDIDATE and SSLINKIOC_CAND_LIST */
+
+struct sslink_candidate_s
+{
+  uint8_t  eui[SSLINK_EUI_LEN];
+  uint8_t  dev_type;          /* enum sslink_dev_type_e */
+  uint8_t  reserved;
+  int16_t  rssi;              /* of the latest JOIN_REQ */
+  uint32_t first_seen_s;      /* seconds since first heard */
+  uint32_t last_seen_s;       /* seconds since last heard */
+};
+
+struct sslink_candlist_s
+{
+  uint16_t max;               /* entries available in cands */
+  uint16_t count;             /* out: entries written */
+  FAR struct sslink_candidate_s *cands;
 };
 
 /* SSLINK_EVT_OTA */
