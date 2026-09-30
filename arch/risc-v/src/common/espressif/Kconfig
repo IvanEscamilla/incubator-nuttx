@@ -1820,6 +1820,7 @@ config ESPRESSIF_I2C_BITBANG
 config ESPRESSIF_SPI
 	bool
 	default n
+	select ARCH_HAVE_SPI_BITORDER
 
 config ESPRESSIF_SPI_SLAVE
 	bool

@@ -955,6 +955,24 @@ static void esp_spi_setbits(struct spi_dev_s *dev, int nbits)
 static int esp_spi_hwfeatures(struct spi_dev_s *dev,
                               spi_hwfeatures_t features)
 {
+#ifdef CONFIG_SPI_BITORDER
+  struct esp_spi_priv_s *priv = (struct esp_spi_priv_s *)dev;
+  bool lsbfirst = (features & HWFEAT_LSBFIRST) != 0;
+
+  /* The GP-SPI peripheral can shift either end of the word out first, on
+   * each direction independently (TRM, SPI_WR_BIT_ORDER/SPI_RD_BIT_ORDER
+   * in SPI_CTRL_REG).  Devices that need LSB-first framing - the Sharp
+   * memory LCDs are the usual case - ask for it through this method while
+   * they hold the bus lock, so the setting is per-transfer rather than
+   * per-bus and the next device to take the lock can ask for the other.
+   */
+
+  spi_ll_set_tx_lsbfirst(priv->ctx->hw, lsbfirst);
+  spi_ll_set_rx_lsbfirst(priv->ctx->hw, lsbfirst);
+
+  features &= ~HWFEAT_LSBFIRST;
+#endif
+
   /* Other H/W features are not supported */
 
   return (features == 0) ? OK : -ENOSYS;
