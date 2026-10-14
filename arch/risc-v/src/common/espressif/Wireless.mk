@@ -63,6 +63,18 @@ CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)nuttx$(DELIM)src$(DELI
 
 CFLAGS += $(DEFINE_PREFIX)ESP_PLATFORM=1
 
+# With the NimBLE host from nuttx-apps, the controller's helpers keep their
+# own names: NimBLE defines os_msys_init() for its host mbuf pools and the
+# ble_sm_alg_gen_* security functions, and so does this controller glue
+# (its own pools and the controller's P-256 helpers).
+
+ifeq ($(CONFIG_NIMBLE),y)
+CFLAGS += $(DEFINE_PREFIX)os_msys_init=esp_ble_os_msys_init
+CFLAGS += $(DEFINE_PREFIX)os_msys_deinit=esp_ble_os_msys_deinit
+CFLAGS += $(DEFINE_PREFIX)ble_sm_alg_gen_dhkey=esp_ble_sm_alg_gen_dhkey
+CFLAGS += $(DEFINE_PREFIX)ble_sm_alg_gen_key_pair=esp_ble_sm_alg_gen_key_pair
+endif
+
 ifeq ($(CONFIG_ARCH_CHIP_ESP32C6),y)
 EXTRA_LIBPATHS += -L $(ARCH_SRCDIR)$(DELIM)chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)controller$(DELIM)lib_esp32c6$(DELIM)esp32c6-bt-lib$(DELIM)esp32c6
 endif
