@@ -291,6 +291,9 @@ endif
 	$(Q) echo "Applying patches..."
 	$(Q) cd chip/$(ESP_HAL_3RDPARTY_REPO)/components/mbedtls/mbedtls && git apply ../../../nuttx/patches/components/mbedtls/mbedtls/*.patch
 endif
+	$(Q) for p in $(sort $(wildcard common$(DELIM)espressif$(DELIM)patches$(DELIM)esp-hal-3rdparty$(DELIM)*.patch)); do \
+	       git -C chip/$(ESP_HAL_3RDPARTY_REPO) apply $(abspath .)/$$p || exit 1; \
+	     done
 
 include common$(DELIM)espressif$(DELIM)Bootloader.mk
 
