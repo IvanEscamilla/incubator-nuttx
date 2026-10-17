@@ -45,12 +45,21 @@ INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)$(DELIM)chip$(DELIM)$(ESP_HAL_3RDPARTY
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)$(DELIM)chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)esp_phy$(DELIM)$(CHIP_SERIES)$(DELIM)include
 INCLUDES += $(INCDIR_PREFIX)$(ARCH_SRCDIR)$(DELIM)chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)nuttx$(DELIM)src$(DELIM)platform$(DELIM)nimble$(DELIM)include
 
+# With the NimBLE host from nuttx-apps, its own (software) tinycrypt provides
+# the uECC and SHA-256 symbols for this glue as well.  When both copies were
+# linked, Espressif's (built on the ECC accelerator) won, and every P-256 DH
+# key computed through NimBLE's ble_sm_alg_gen_dhkey() failed, even between
+# two keys generated on the same board: LE Secure Connections pairing and
+# mesh provisioning could not complete.
+
+ifneq ($(CONFIG_NIMBLE),y)
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)common$(DELIM)tinycrypt$(DELIM)src$(DELIM)ecc.c
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)common$(DELIM)tinycrypt$(DELIM)src$(DELIM)ecc_dh.c
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)common$(DELIM)tinycrypt$(DELIM)src$(DELIM)ecc_platform_specific.c
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)common$(DELIM)tinycrypt$(DELIM)port$(DELIM)esp_tinycrypt_port.c
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)common$(DELIM)tinycrypt$(DELIM)src$(DELIM)sha256.c
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)common$(DELIM)tinycrypt$(DELIM)src$(DELIM)utils.c
+endif
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)porting$(DELIM)mem$(DELIM)bt_osi_mem.c
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)porting$(DELIM)mem$(DELIM)os_msys_init.c
 CHIP_CSRCS += chip$(DELIM)$(ESP_HAL_3RDPARTY_REPO)$(DELIM)components$(DELIM)bt$(DELIM)porting$(DELIM)transport$(DELIM)src$(DELIM)hci_transport.c
