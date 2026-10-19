@@ -267,15 +267,11 @@ enum sslink_role_e
   SSLINK_ROLE_GATEWAY,
 };
 
-/* Device types, reported in pairing and SSLINK_MSG_DEVICE_INFO */
-
-enum sslink_dev_type_e
-{
-  SSLINK_DEV_UNKNOWN    = 0,
-  SSLINK_DEV_GATEWAY    = 1,
-  SSLINK_DEV_GAS_TANK   = 2,
-  SSLINK_DEV_WATER_TANK = 3,
-};
+/* Device types, reported in pairing and SSLINK_MSG_DEVICE_INFO, are plain
+ * uint8_t values (dev_type fields below).  The OS carries no product data:
+ * the values are the shared SmartSync device kinds and are named in the
+ * out-of-tree driver's sslink_dev_type.h (enum sslink_dev_type_e).
+ */
 
 /* Radio profiles (500 kHz bandwidth, see the SSLINK_PROFILE_* Kconfig) */
 
@@ -406,7 +402,7 @@ begin_packed_struct struct sslink_tank_level_s
 
 begin_packed_struct struct sslink_device_info_s
 {
-  uint8_t  dev_type;          /* enum sslink_dev_type_e */
+  uint8_t  dev_type;          /* device kind, see sslink_dev_type.h */
   uint8_t  eui[SSLINK_EUI_LEN];
   uint8_t  fw_version[4];     /* major, minor, patch, build */
   uint8_t  hw_rev;
@@ -604,7 +600,7 @@ struct sslink_eui_s
 struct sslink_candidate_s
 {
   uint8_t  eui[SSLINK_EUI_LEN];
-  uint8_t  dev_type;          /* enum sslink_dev_type_e */
+  uint8_t  dev_type;          /* device kind, see sslink_dev_type.h */
   uint8_t  reserved;
   int16_t  rssi;              /* of the latest JOIN_REQ */
   uint32_t first_seen_s;      /* seconds since first heard */
@@ -746,7 +742,7 @@ struct sslink_ota_status_s
 struct sslink_board_s
 {
   uint8_t  eui[SSLINK_EUI_LEN];  /* unique id, e.g. from the eFuse MAC */
-  uint8_t  dev_type;             /* enum sslink_dev_type_e */
+  uint8_t  dev_type;             /* device kind, see sslink_dev_type.h */
   uint8_t  wake_cause;           /* enum sslink_wake_e */
 };
 
