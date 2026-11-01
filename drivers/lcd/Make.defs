@@ -143,8 +143,12 @@ ifeq ($(CONFIG_LCD_ST7789),y)
   CSRCS += st7789.c
 endif
 
-ifeq ($(CONFIG_LCD_ST7796),y)
+ifeq ($(CONFIG_LCD_ST7796_BUS_SPI),y)
   CSRCS += st7796.c
+endif
+
+ifeq ($(CONFIG_LCD_ST7796_BUS_I80),y)
+  CSRCS += st7796_i80.c
 endif
 
 ifeq ($(CONFIG_LCD_GC9A01),y)

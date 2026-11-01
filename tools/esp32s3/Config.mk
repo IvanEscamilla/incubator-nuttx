@@ -45,9 +45,11 @@ ifeq ($(CONFIG_ESP32S3_FLASH_MODE_DIO),y)
 else ifeq ($(CONFIG_ESP32S3_FLASH_MODE_DOUT),y)
 	FLASH_MODE := dout
 else ifeq ($(CONFIG_ESP32S3_FLASH_MODE_QIO),y)
-	FLASH_MODE := qio
+	# The boot ROM reads the image header in DIO; the startup code enables
+	# QIO (bootloader_enable_qio_mode), as ESP-IDF does.
+	FLASH_MODE := dio
 else ifeq ($(CONFIG_ESP32S3_FLASH_MODE_QOUT),y)
-	FLASH_MODE := qout
+	FLASH_MODE := dio
 else ifeq ($(CONFIG_ESP32S3_FLASH_MODE_OCT),y)
 	FLASH_MODE := qio
 endif

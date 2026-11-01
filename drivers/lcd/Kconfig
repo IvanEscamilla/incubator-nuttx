@@ -830,12 +830,39 @@ endif # LCD_ST7789
 config LCD_ST7796
 	bool "ST7796 LCD Display"
 	default n
-	depends on SPI
-	depends on LCD_FRAMEBUFFER
 	---help---
 		Enable support for ST7796 LCD display driver.
 
 if LCD_ST7796
+
+choice LCD_ST7796_BUS
+	prompt "ST7796 bus"
+	default LCD_ST7796_BUS_SPI
+
+config LCD_ST7796_BUS_SPI
+	bool "SPI (frame buffer driver)"
+	depends on SPI
+	depends on LCD_FRAMEBUFFER
+	---help---
+		The panel is connected through SPI and is exposed as a frame buffer.
+
+config LCD_ST7796_BUS_I80
+	bool "8-bit i80 (8080) parallel bus (lcd_dev driver)"
+	select LCD_DEV
+	---help---
+		The panel is on a parallel i80 bus provided by the board (see
+		struct st7796_i80_ops_s).  The driver implements the lcd_dev_s
+		interface (/dev/lcd0 with LCDDEVIO_PUTAREA, honouring the area
+		stride).  No frame buffer is allocated.
+
+endchoice # ST7796 bus
+
+config LCD_ST7796_TE
+	bool "ST7796 tearing-effect output"
+	default n
+	depends on LCD_ST7796_BUS_I80
+	---help---
+		Send TEON (V-blank only) so that the TE pin pulses once per refresh.
 
 config LCD_ST7796_XRES
 	int "ST7796 X Resolution (raw panel width)"
@@ -885,6 +912,7 @@ config LCD_ST7796_BPP
 
 config LCD_ST7796_FREQUENCY
 	int "ST7796 SPI Frequency (Hz)"
+	depends on LCD_ST7796_BUS_SPI
 	default 40000000
 	range 1000000 80000000
 	---help---
@@ -894,6 +922,7 @@ config LCD_ST7796_FREQUENCY
 
 config LCD_ST7796_SPIMODE
 	int "ST7796 SPI Mode"
+	depends on LCD_ST7796_BUS_SPI
 	default 0
 	---help---
 		SPI mode for ST7796 (CPOL/CPHA).
@@ -966,7 +995,7 @@ config LCD_ST7796_ROTATION
 
 config LCD_ST7796_FB_SIZE
 	int "ST7796 Framebuffer size (KB)"
-	depends on VIDEO_FB
+	depends on VIDEO_FB && LCD_ST7796_BUS_SPI
 	default 300
 	range 150 600
 	---help---

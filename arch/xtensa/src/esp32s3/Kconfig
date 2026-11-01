@@ -934,6 +934,17 @@ config ESP32S3_LCD
 	---help---
 		LCD controller that outputs parallel data and supports RGB interface.
 
+config ESP32S3_LCD_I80
+	bool "LCD i80 (8080) bus"
+	default n
+	select ESP32S3_DMA
+	select ESPRESSIF_GPIO_IRQ
+	---help---
+		LCD_CAM peripheral in 8-bit i80 (8080) mode with GDMA, to drive
+		parallel MCU-interface panels (for example the ST7796 on the
+		WT32-SC01 Plus).  Do not enable together with ESP32S3_LCD (RGB
+		mode), both use the LCD_CAM peripheral.
+
 config ESP32S3_CAM
 	bool "Camera (DVP)"
 	default n
@@ -2545,6 +2556,124 @@ config ESP32S3_OTG_DEBUG_REGISTER
 	depends on DEBUG_USB_INFO
 
 endmenu # USB OTG Configuration
+
+menu "LCD i80 Bus Configuration"
+	depends on ESP32S3_LCD_I80
+
+config ESP32S3_LCD_I80_WR_PIN
+	int "LCD_WR (write clock) pin"
+	default 47
+	range 0 48
+
+config ESP32S3_LCD_I80_DC_PIN
+	int "LCD_RS (data/command) pin"
+	default 0
+	range 0 48
+	---help---
+		GPIO 0 is a strapping pin; the driver configures it only when the
+		bus is initialised, after boot.
+
+config ESP32S3_LCD_I80_TE_PIN
+	int "LCD_TE (tearing effect) input pin, -1 to disable"
+	default 48
+	range -1 48
+
+config ESP32S3_LCD_I80_D0_PIN
+	int "LCD_DB0 pin"
+	default 9
+	range 0 48
+
+config ESP32S3_LCD_I80_D1_PIN
+	int "LCD_DB1 pin"
+	default 46
+	range 0 48
+
+config ESP32S3_LCD_I80_D2_PIN
+	int "LCD_DB2 pin"
+	default 3
+	range 0 48
+
+config ESP32S3_LCD_I80_D3_PIN
+	int "LCD_DB3 pin"
+	default 8
+	range 0 48
+
+config ESP32S3_LCD_I80_D4_PIN
+	int "LCD_DB4 pin"
+	default 18
+	range 0 48
+
+config ESP32S3_LCD_I80_D5_PIN
+	int "LCD_DB5 pin"
+	default 17
+	range 0 48
+
+config ESP32S3_LCD_I80_D6_PIN
+	int "LCD_DB6 pin"
+	default 16
+	range 0 48
+
+config ESP32S3_LCD_I80_D7_PIN
+	int "LCD_DB7 pin"
+	default 15
+	range 0 48
+
+config ESP32S3_LCD_I80_PCLK_MHZ
+	int "WR clock for internal-RAM and bounce transfers (MHz)"
+	default 40
+	range 13 40
+	---help---
+		Valid values are 80/n: 40, 26 (26.7), 20, 16, 13 (13.3), 8 ...   The LCD
+		clock is the 160 MHz PLL divided by 2, then by an integer.  Other
+		values are rounded to the nearest valid divider.
+
+config ESP32S3_LCD_I80_PCLK_PSRAM_MHZ
+	int "WR clock for direct PSRAM transfers (MHz)"
+	default 20
+	range 4 40
+	---help---
+		Quad PSRAM at 80 MHz cannot feed the 8-bit bus at 40 MHz.  Raise this
+		only if the stress test stays clean.
+
+config ESP32S3_LCD_I80_BOUNCE
+	bool "Bounce mode for PSRAM sources"
+	default n
+	---help---
+		Copy rows from PSRAM into two internal DMA buffers in turn instead
+		of letting GDMA read PSRAM directly.  The DMA starts only on a full
+		buffer, so a slow PSRAM read leaves WR idle rather than sending
+		garbage, and the internal-RAM clock can be used.
+
+config ESP32S3_LCD_I80_BOUNCE_BUFSIZE
+	int "Bounce buffer size (bytes)"
+	default 4096
+	range 1024 32768
+	depends on ESP32S3_LCD_I80
+	---help---
+		Size of each of the two bounce buffers, static arrays in internal
+		RAM (the heap may hand out PSRAM).  A multiple of 4.
+
+config ESP32S3_LCD_I80_MAXROWS
+	int "Maximum rows per DMA transfer"
+	default 480
+	range 16 1024
+	---help---
+		Number of DMA descriptors (12 bytes each, internal RAM) reserved
+		for a strided transfer with one descriptor per row.
+
+config ESP32S3_LCD_I80_EXTSTART_US
+	int "Delay between starting GDMA and the LCD for PSRAM sources (us)"
+	default 500
+	range 1 5000
+
+config ESP32S3_LCD_I80_EXTMEM_BLOCK
+	int "GDMA external-memory block size (16, 32 or 64)"
+	default 32
+	---help---
+		Block size GDMA uses to read PSRAM.  It must not be smaller than the
+		data cache line size.
+
+endmenu # LCD i80 Bus Configuration
 
 menu "LCD Controller Configuration"
 	depends on ESP32S3_LCD
