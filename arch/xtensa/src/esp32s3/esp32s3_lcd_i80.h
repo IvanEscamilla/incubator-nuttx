@@ -123,6 +123,20 @@ int esp32s3_lcd_i80_write(int cmd, FAR const uint8_t *buf, size_t row_bytes,
                           size_t rows, size_t stride);
 
 /****************************************************************************
+ * Name: esp32s3_lcd_i80_set_async / esp32s3_lcd_i80_sync
+ *
+ * Description:
+ *   In async mode a write from a direct (non-bounce) buffer returns once
+ *   the transfer is started, so the caller can render the next band while
+ *   it runs.  The buffer must stay untouched until the next write, command
+ *   or esp32s3_lcd_i80_sync(), which wait for it.  Off by default.
+ *
+ ****************************************************************************/
+
+int esp32s3_lcd_i80_set_async(bool async);
+int esp32s3_lcd_i80_sync(void);
+
+/****************************************************************************
  * Name: esp32s3_lcd_i80_set_pclk
  *
  * Description:

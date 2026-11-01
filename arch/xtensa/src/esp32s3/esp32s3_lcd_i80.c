@@ -104,6 +104,10 @@ struct lcd_i80_s
 {
   bool     initialized;
   bool     bounce;
+  bool     async;                /* pixel writes return once started */
+  bool     pending;              /* a started write has not been waited for */
+  int      pending_nd;           /* descriptors of the pending write */
+  uint32_t pending_start;        /* CCOUNT at its start */
   mutex_t  lock;
   sem_t    done;
   sem_t    te_sem;
@@ -399,6 +403,32 @@ static int i80_wait(FAR struct lcd_i80_s *priv)
 }
 
 /****************************************************************************
+ * Name: i80_finish
+ *
+ * Description:
+ *   Complete the pixel write that was started without waiting (async mode).
+ *   Called with the lock held before anything else uses the bus, its
+ *   descriptors or its clock.
+ *
+ ****************************************************************************/
+
+static int i80_finish(FAR struct lcd_i80_s *priv)
+{
+  int ret;
+
+  if (!priv->pending)
+    {
+      return OK;
+    }
+
+  priv->pending = false;
+  ret = i80_wait(priv);
+  i80_dma_check(priv, priv->desc, priv->pending_nd);
+  priv->stats.last_xfer_us = i80_us(priv->pending_start);
+  return ret;
+}
+
+/****************************************************************************
  * Name: i80_copy_rows
  *
  * Description:
@@ -497,6 +527,18 @@ static int i80_write_direct(FAR struct lcd_i80_s *priv, int cmd,
         }
 
       i80_kick(priv, cmd, priv->desc, true);
+      if (priv->async && rows == n)
+        {
+          /* The last (usually the only) piece: leave it running; the next
+           * bus user, or esp32s3_lcd_i80_sync(), waits for it.
+           */
+
+          priv->pending       = true;
+          priv->pending_nd    = nd;
+          priv->pending_start = i80_ccount();
+          return OK;
+        }
+
       ret = i80_wait(priv);
       i80_dma_check(priv, priv->desc, nd);
 
@@ -712,6 +754,7 @@ int esp32s3_lcd_i80_cmd(uint8_t cmd, FAR const uint8_t *params, size_t len)
     }
 
   nxmutex_lock(&priv->lock);
+  (void)i80_finish(priv);
   i80_setclk(priv, CONFIG_ESP32S3_LCD_I80_PCLK_MHZ * 1000);
 
   if (len > 0)
@@ -756,6 +799,7 @@ int esp32s3_lcd_i80_write(int cmd, FAR const uint8_t *buf, size_t row_bytes,
   ext = esp32s3_ptr_extram(buf);
 
   nxmutex_lock(&priv->lock);
+  (void)i80_finish(priv);
 
   if (priv->override_khz != 0)
     {
@@ -780,7 +824,11 @@ int esp32s3_lcd_i80_write(int cmd, FAR const uint8_t *buf, size_t row_bytes,
       ret = i80_write_direct(priv, cmd, buf, row_bytes, rows, stride);
     }
 
-  priv->stats.last_xfer_us = i80_us(start);
+  if (!priv->pending)
+    {
+      priv->stats.last_xfer_us = i80_us(start);
+    }
+
   if (ret == OK)
     {
       priv->stats.transfers++;
@@ -809,6 +857,37 @@ uint32_t esp32s3_lcd_i80_set_pclk(uint32_t khz)
     }
 
   return LCD_I80_CLK_KHZ / i80_prescale(khz);
+}
+
+/****************************************************************************
+ * Name: esp32s3_lcd_i80_set_async
+ ****************************************************************************/
+
+int esp32s3_lcd_i80_set_async(bool async)
+{
+  FAR struct lcd_i80_s *priv = &g_i80;
+  int ret;
+
+  nxmutex_lock(&priv->lock);
+  ret = i80_finish(priv);
+  priv->async = async;
+  nxmutex_unlock(&priv->lock);
+  return ret;
+}
+
+/****************************************************************************
+ * Name: esp32s3_lcd_i80_sync
+ ****************************************************************************/
+
+int esp32s3_lcd_i80_sync(void)
+{
+  FAR struct lcd_i80_s *priv = &g_i80;
+  int ret;
+
+  nxmutex_lock(&priv->lock);
+  ret = i80_finish(priv);
+  nxmutex_unlock(&priv->lock);
+  return ret;
 }
 
 /****************************************************************************

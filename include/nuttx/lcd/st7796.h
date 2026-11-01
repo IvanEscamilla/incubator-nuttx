@@ -53,6 +53,13 @@
 #define ST7796IOC_SETBOUNCE   _LCDIOC(0x44) /* Arg: int (0 direct, 1 bounce) */
 #define ST7796IOC_SETBRIGHT   _LCDIOC(0x45) /* Arg: int, backlight 0..100 % */
 #define ST7796IOC_GETMODE     _LCDIOC(0x46) /* Arg: struct st7796_mode_s* */
+#define ST7796IOC_SETASYNC    _LCDIOC(0x47) /* Arg: int (1: LCDDEVIO_PUTAREA
+                                             *      returns once the transfer
+                                             *      has started; the buffer
+                                             *      is busy until the next
+                                             *      PUTAREA or ST7796IOC_SYNC) */
+#define ST7796IOC_SYNC        _LCDIOC(0x48) /* Arg: none, waits for the
+                                             *      transfer in flight */
 
 #endif
 
