@@ -473,7 +473,13 @@ int psram_enable(int mode, int vaddrmode)
    * that user selected. SPI0/1 registers are all set correctly
    */
 
-  /* FIXME: spi_timing_enter_mspi_high_speed_mode(true); */
+  /* The quad PSRAM needs no timing tuning, so the call above does nothing
+   * and the PSRAM clock stays at the 20 MHz the ROM left it (divider 4).
+   * Apply the clock the user selected (80 MHz by default), as ESP-IDF does
+   * in spi_timing_enter_mspi_high_speed_mode().
+   */
+
+  esp32s3_spi_timing_set_mspi_high_speed(true);
 
   return OK;
 }
