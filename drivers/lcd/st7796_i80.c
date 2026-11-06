@@ -61,6 +61,7 @@
 #define ST7796_CASET            0x2a
 #define ST7796_RASET            0x2b
 #define ST7796_RAMWR            0x2c
+#define ST7796_RAMWRC           0x3c
 #define ST7796_TEON             0x35
 #define ST7796_MADCTL           0x36
 #define ST7796_PIXFMT           0x3a
@@ -328,7 +329,7 @@ static int st7796_i80_putarea(FAR struct lcd_dev_s *dev,
   ret = st7796_i80_setwindow(priv, row_start, row_end, col_start, col_end);
   if (ret >= 0)
     {
-      ret = priv->ops->write(ST7796_RAMWR, buffer, row_bytes,
+      ret = priv->ops->write(ST7796_RAMWR, ST7796_RAMWRC, buffer, row_bytes,
                              row_end - row_start + 1, stride);
     }
 

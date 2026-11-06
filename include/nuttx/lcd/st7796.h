@@ -109,12 +109,13 @@ struct st7796_i80_ops_s
 
   CODE int (*cmd)(uint8_t cmd, FAR const uint8_t *params, size_t len);
 
-  /* Send cmd (negative: none) and then rows of 16-bit pixels, stride bytes
-   * apart.  Returns when the transfer is complete.
+  /* Send cmd and then rows of 16-bit pixels, stride bytes apart.  If the
+   * bus splits the data into transactions, continue_cmd starts every
+   * transaction after the first.  Returns when the transfer is complete.
    */
 
-  CODE int (*write)(int cmd, FAR const uint8_t *buf, size_t row_bytes,
-                    size_t rows, size_t stride);
+  CODE int (*write)(int cmd, int continue_cmd, FAR const uint8_t *buf,
+                    size_t row_bytes, size_t rows, size_t stride);
 
   /* Optional: board-specific ioctl (statistics, clock, mode, TE wait) */
 

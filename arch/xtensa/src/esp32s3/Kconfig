@@ -2629,11 +2629,12 @@ config ESP32S3_LCD_I80_PCLK_MHZ
 
 config ESP32S3_LCD_I80_PCLK_PSRAM_MHZ
 	int "WR clock for direct PSRAM transfers (MHz)"
-	default 20
+	default 8
 	range 4 40
 	---help---
-		Quad PSRAM at 80 MHz cannot feed the 8-bit bus at 40 MHz.  Raise this
-		only if the stress test stays clean.
+		The WT32-SC01 Plus stress test is clean at 8 MHz and corrupts rows at
+		10 MHz and above.  Raise this only if the target board's stress test
+		stays clean.
 
 config ESP32S3_LCD_I80_BOUNCE
 	bool "Bounce mode for PSRAM sources"

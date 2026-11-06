@@ -110,16 +110,18 @@ int esp32s3_lcd_i80_cmd(uint8_t cmd, FAR const uint8_t *params, size_t len);
  *   the data is little-endian RGB565 in memory.
  *
  * Input Parameters:
- *   cmd       - Command to send first (RAMWR); negative: none (continue)
- *   buf       - First byte of the first row
- *   row_bytes - Bytes per row (even)
- *   rows      - Number of rows
- *   stride    - Distance in bytes between the starts of two rows; 0 sends
- *               the same row rows times (a fill)
+ *   cmd          - Command to send first (RAMWR)
+ *   continue_cmd - Command to send before later bounce chunks (RAMWRC)
+ *   buf          - First byte of the first row
+ *   row_bytes    - Bytes per row (even)
+ *   rows         - Number of rows
+ *   stride       - Distance in bytes between the starts of two rows; 0 sends
+ *                  the same row rows times (a fill)
  *
  ****************************************************************************/
 
-int esp32s3_lcd_i80_write(int cmd, FAR const uint8_t *buf, size_t row_bytes,
+int esp32s3_lcd_i80_write(int cmd, int continue_cmd,
+                          FAR const uint8_t *buf, size_t row_bytes,
                           size_t rows, size_t stride);
 
 /****************************************************************************

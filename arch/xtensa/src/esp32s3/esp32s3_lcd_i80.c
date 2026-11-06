@@ -82,9 +82,12 @@
 #define LCD_I80_BDESC       ((LCD_I80_BBUF + LCD_I80_PIECE_MAX - 1) / \
                              LCD_I80_PIECE_MAX)
 
-/* GDMA TX raw interrupt bits (esp_hal_dma gdma_ll.h) */
+/* GDMA TX raw interrupt bits (esp_hal_dma gdma_ll.h).  OUT_DONE and OUT_EOF
+ * are asserted for the descriptor chains used here.  OUT_TOTAL_EOF is not
+ * asserted in this mode, even though every descriptor has been consumed.
+ */
 
-#define LCD_I80_DMA_TOTAL_EOF  (1 << 3)
+#define LCD_I80_DMA_COMPLETE   ((1 << 0) | (1 << 1))
 #define LCD_I80_DMA_UNDERRUN   ((1 << 5) | (1 << 7))
 #define LCD_I80_DMA_ERRORS     ((1 << 2) | (1 << 4) | (1 << 5) | \
                                 (1 << 6) | (1 << 7))
@@ -287,7 +290,7 @@ static void i80_dma_check(FAR struct lcd_i80_s *priv,
       priv->stats.last_dmaerr = raw;
     }
 
-  if (unread || (raw & LCD_I80_DMA_TOTAL_EOF) == 0)
+  if (unread || (raw & LCD_I80_DMA_COMPLETE) != LCD_I80_DMA_COMPLETE)
     {
       int owned = 0;
 
@@ -560,54 +563,53 @@ static int i80_write_direct(FAR struct lcd_i80_s *priv, int cmd,
  ****************************************************************************/
 
 static int i80_write_bounce(FAR struct lcd_i80_s *priv, int cmd,
-                            FAR const uint8_t *buf, size_t row_bytes,
-                            size_t rows, size_t stride)
+                            int continue_cmd, FAR const uint8_t *buf,
+                            size_t row_bytes, size_t rows, size_t stride)
 {
-  size_t total = row_bytes * rows;
+  size_t max_bytes = LCD_I80_BBUF < LCD_I80_PIECE_MAX ?
+                     LCD_I80_BBUF : LCD_I80_PIECE_MAX;
+  size_t max_rows = max_bytes / row_bytes;
+  size_t left = rows;
   size_t row = 0;
   size_t off = 0;
-  size_t len[2];
-  size_t sent = 0;
+  size_t nrows[2];
   int cur = 0;
   int ret = OK;
-  int nd[2];
-  int i;
+
+  /* Keep each bounce transfer in one descriptor and on a row boundary.  The
+   * panel write is split into LCD_CAM transactions, so every transaction
+   * after the first starts with the panel's memory-write-continue command.
+   */
+
+  if (max_rows == 0)
+    {
+      return -E2BIG;
+    }
 
   /* Prepare the first buffer */
 
-  len[0] = total < LCD_I80_BBUF ? total : LCD_I80_BBUF;
-  i80_copy_rows(priv->bbuf[0], len[0], buf, row_bytes, stride, &row, &off);
+  nrows[0] = left < max_rows ? left : max_rows;
+  i80_copy_rows(priv->bbuf[0], nrows[0] * row_bytes, buf, row_bytes, stride,
+                &row, &off);
+  left -= nrows[0];
 
-  while (len[cur] > 0)
+  while (nrows[cur] > 0)
     {
-      size_t l = len[cur];
-      size_t o = 0;
+      size_t len = nrows[cur] * row_bytes;
 
-      nd[cur] = 0;
-      while (o < l)
-        {
-          size_t piece = l - o < LCD_I80_PIECE_MAX ?
-                         l - o : LCD_I80_PIECE_MAX;
-
-          i80_mkdesc(&priv->bdesc[cur][nd[cur]], &priv->bbuf[cur][o],
-                     piece, o + piece == l);
-          o += piece;
-          nd[cur]++;
-        }
-
+      i80_mkdesc(&priv->bdesc[cur][0], priv->bbuf[cur], len, true);
       i80_kick(priv, cmd, priv->bdesc[cur], true);
-      cmd   = -1;
-      sent += l;
+      cmd = continue_cmd;
 
       /* Fill the other buffer while this one is on the bus */
 
-      len[cur ^ 1] = total - sent < LCD_I80_BBUF ? total - sent :
-                     LCD_I80_BBUF;
-      i80_copy_rows(priv->bbuf[cur ^ 1], len[cur ^ 1], buf, row_bytes,
-                    stride, &row, &off);
+      nrows[cur ^ 1] = left < max_rows ? left : max_rows;
+      i80_copy_rows(priv->bbuf[cur ^ 1], nrows[cur ^ 1] * row_bytes, buf,
+                    row_bytes, stride, &row, &off);
+      left -= nrows[cur ^ 1];
 
       ret = i80_wait(priv);
-      i80_dma_check(priv, priv->bdesc[cur], nd[cur]);
+      i80_dma_check(priv, priv->bdesc[cur], 1);
       if (ret < 0)
         {
           break;
@@ -782,7 +784,8 @@ int esp32s3_lcd_i80_cmd(uint8_t cmd, FAR const uint8_t *params, size_t len)
  * Name: esp32s3_lcd_i80_write
  ****************************************************************************/
 
-int esp32s3_lcd_i80_write(int cmd, FAR const uint8_t *buf, size_t row_bytes,
+int esp32s3_lcd_i80_write(int cmd, int continue_cmd,
+                          FAR const uint8_t *buf, size_t row_bytes,
                           size_t rows, size_t stride)
 {
   FAR struct lcd_i80_s *priv = &g_i80;
@@ -791,7 +794,8 @@ int esp32s3_lcd_i80_write(int cmd, FAR const uint8_t *buf, size_t row_bytes,
   int ret;
 
   if (!priv->initialized || buf == NULL || row_bytes == 0 || rows == 0 ||
-      (row_bytes & 1) != 0 || (stride != 0 && stride < row_bytes))
+      cmd < 0 || continue_cmd < 0 || (row_bytes & 1) != 0 ||
+      (stride != 0 && stride < row_bytes))
     {
       return -EINVAL;
     }
@@ -817,7 +821,8 @@ int esp32s3_lcd_i80_write(int cmd, FAR const uint8_t *buf, size_t row_bytes,
   start = i80_ccount();
   if (ext && priv->bounce)
     {
-      ret = i80_write_bounce(priv, cmd, buf, row_bytes, rows, stride);
+      ret = i80_write_bounce(priv, cmd, continue_cmd, buf, row_bytes, rows,
+                             stride);
     }
   else
     {
