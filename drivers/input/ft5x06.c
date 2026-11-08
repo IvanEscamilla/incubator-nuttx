@@ -105,6 +105,11 @@ struct ft5x06_dev_s
   uint8_t lastevent;                        /* Last reported event */
   int16_t lastx;                            /* Last reported X position */
   int16_t lasty;                            /* Last reported Y position */
+#else
+  unsigned int nlast;                       /* Contacts reported last time */
+  uint8_t lastids[FT5X06_MAX_TOUCHES];      /* Their ids */
+  int16_t lastxs[FT5X06_MAX_TOUCHES];       /* Their X positions */
+  int16_t lastys[FT5X06_MAX_TOUCHES];       /* Their Y positions */
 #endif
   mutex_t devlock;                          /* Manages exclusive access to
                                              * this structure */
@@ -502,10 +507,9 @@ static ssize_t ft5x06_sample(FAR struct ft5x06_dev_s *priv, FAR char *buffer,
       ntouches = maxtouches;
     }
 
-  if (ntouches < 1)
+  if (ntouches > FT5X06_MAX_TOUCHES)
     {
-      priv->valid = false;
-      return 0;  /* No touches read. */
+      ntouches = FT5X06_MAX_TOUCHES;
     }
 
   /* User data buffer points (sink) */
@@ -513,24 +517,81 @@ static ssize_t ft5x06_sample(FAR struct ft5x06_dev_s *priv, FAR char *buffer,
   sample = (FAR struct touch_sample_s *)buffer;
   point  = sample->point;
 
-  /* Return the number of touches read */
+  /* The chip reports no lift event: a finger that leaves simply stops being
+   * counted (tdstatus drops).  Emit an UP at the last position for every
+   * contact reported before that is gone, so the upper half sees the release.
+   */
 
-  sample->npoints = ntouches;
+  {
+    unsigned int n = 0;
+    unsigned int j;
 
-  /* Decode and return the touch points */
+    for (i = 0; i < ntouches; i++)
+      {
+        int event = TOUCH_POINT_GET_EVENT(touch[i]);
+        uint8_t id = TOUCH_POINT_GET_ID(touch[i]);
+        bool known = false;
 
-  for (i = 0; i < ntouches; i++)
-    {
-      int event         = TOUCH_POINT_GET_EVENT(touch[i]);
+        for (j = 0; j < priv->nlast; j++)
+          {
+            known |= priv->lastids[j] == id;
+          }
 
-      point[i].id       = TOUCH_POINT_GET_ID(touch[i]);
-      point[i].flags    = g_event_map[event];
-      point[i].x        = TOUCH_POINT_GET_X(touch[i]);
-      point[i].y        = TOUCH_POINT_GET_Y(touch[i]);
-      point[i].h        = 0;
-      point[i].w        = 0;
-      point[i].pressure = 0;
-    }
+        point[n].id       = id;
+        point[n].flags    = g_event_map[event];
+        if (event == FT5X06_CONTACT && !known)
+          {
+            point[n].flags = g_event_map[FT5X06_DOWN];
+          }
+
+        point[n].x        = TOUCH_POINT_GET_X(touch[i]);
+        point[n].y        = TOUCH_POINT_GET_Y(touch[i]);
+        point[n].h        = 0;
+        point[n].w        = 0;
+        point[n].pressure = 0;
+        n++;
+      }
+
+    for (j = 0; j < priv->nlast && n < maxtouches; j++)
+      {
+        bool present = false;
+
+        for (i = 0; i < ntouches; i++)
+          {
+            present |= TOUCH_POINT_GET_ID(touch[i]) == priv->lastids[j];
+          }
+
+        if (!present)
+          {
+            point[n].id       = priv->lastids[j];
+            point[n].flags    = TOUCH_UP | TOUCH_ID_VALID | TOUCH_POS_VALID;
+            point[n].x        = priv->lastxs[j];
+            point[n].y        = priv->lastys[j];
+            point[n].h        = 0;
+            point[n].w        = 0;
+            point[n].pressure = 0;
+            n++;
+          }
+      }
+
+    priv->nlast = 0;
+    for (i = 0; i < ntouches; i++)
+      {
+        priv->lastids[i] = TOUCH_POINT_GET_ID(touch[i]);
+        priv->lastxs[i]  = TOUCH_POINT_GET_X(touch[i]);
+        priv->lastys[i]  = TOUCH_POINT_GET_Y(touch[i]);
+        priv->nlast++;
+      }
+
+    if (n == 0)
+      {
+        priv->valid = false;
+        return 0;  /* No touches and nothing to release. */
+      }
+
+    sample->npoints = n;
+    ntouches = n;
+  }
 
   priv->valid = false;
   return SIZEOF_TOUCH_SAMPLE_S(ntouches);
