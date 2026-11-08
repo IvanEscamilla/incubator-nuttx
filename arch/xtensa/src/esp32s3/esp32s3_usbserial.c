@@ -35,6 +35,8 @@
 #endif
 
 #include <nuttx/arch.h>
+#include <nuttx/clock.h>
+#include <nuttx/wdog.h>
 #include <nuttx/irq.h>
 #include <nuttx/kmalloc.h>
 #include <nuttx/serial/serial.h>
@@ -56,6 +58,15 @@
 /* The hardware buffer has a fixed size of 64 bytes */
 
 #define ESP32S3_USBCDC_BUFFERSIZE 64
+
+/* With no host reading the port (a closed terminal, or no cable) the IN
+ * endpoint never drains and a blocking console write would stall its
+ * caller, which at boot is the init task.  After the endpoint has been busy
+ * this long the host is considered absent: output is dropped, so nothing
+ * waits on it, until the endpoint is free again.
+ */
+
+#define ESP32S3_USB_HOST_TIMEOUT_MS 200
 
 /****************************************************************************
  * Private Types
@@ -93,6 +104,9 @@ static int  esp32s3_ioctl(struct file *filep, int cmd, unsigned long arg);
 /****************************************************************************
  * Private Data
  ****************************************************************************/
+
+static struct wdog_s g_host_wdog; /* Declares the host absent */
+static bool    g_host_absent;  /* Endpoint busy for too long: drop output */
 
 static char g_rxbuffer[ESP32S3_USBCDC_BUFFERSIZE];
 static char g_txbuffer[ESP32S3_USBCDC_BUFFERSIZE];
@@ -219,15 +233,50 @@ static void esp32s3_shutdown(struct uart_dev_s *dev)
  *
  ****************************************************************************/
 
+static void esp32s3_host_timeout(wdparm_t arg)
+{
+  struct uart_dev_s *dev = (struct uart_dev_s *)arg;
+
+  /* The transmit interrupt has been waiting for ESP32S3_USB_HOST_TIMEOUT_MS.
+   * If the endpoint is still busy, no host is reading: drop the pending
+   * output so that writers do not wait for an interrupt that will never
+   * come.  If it is free, the wake-up was missed: send now.
+   */
+
+  if (!(getreg32(USB_SERIAL_JTAG_EP1_CONF_REG) &
+        USB_SERIAL_JTAG_SERIAL_IN_EP_DATA_FREE))
+    {
+      g_host_absent = true;
+    }
+
+  uart_xmitchars(dev);
+
+  if (dev->xmit.head != dev->xmit.tail)
+    {
+      wd_start(&g_host_wdog,
+               g_host_absent ? 1 : MSEC2TICK(ESP32S3_USB_HOST_TIMEOUT_MS),
+               esp32s3_host_timeout, (wdparm_t)dev);
+    }
+}
+
 static void esp32s3_txint(struct uart_dev_s *dev, bool enable)
 {
   if (enable)
     {
+      /* With no host, nothing raises the interrupt: have the timer drop the
+       * data (next tick), and wait the full timeout otherwise.
+       */
+
+      wd_start(&g_host_wdog,
+               g_host_absent ? 1 : MSEC2TICK(ESP32S3_USB_HOST_TIMEOUT_MS),
+               esp32s3_host_timeout, (wdparm_t)dev);
+
       modifyreg32(USB_SERIAL_JTAG_INT_ENA_REG, 0,
                   USB_SERIAL_JTAG_SERIAL_IN_EMPTY_INT_ENA);
     }
   else
     {
+      wd_cancel(&g_host_wdog);
       modifyreg32(USB_SERIAL_JTAG_INT_ENA_REG,
                   USB_SERIAL_JTAG_SERIAL_IN_EMPTY_INT_ENA, 0);
     }
@@ -349,6 +398,11 @@ static bool esp32s3_txempty(struct uart_dev_s *dev)
 {
   uint32_t regval;
 
+  if (g_host_absent)
+    {
+      return true;
+    }
+
   regval = getreg32(USB_SERIAL_JTAG_JFIFO_ST_REG);
 
   return regval & USB_SERIAL_JTAG_OUT_FIFO_EMPTY;
@@ -368,7 +422,18 @@ static bool esp32s3_txready(struct uart_dev_s *dev)
 
   regval = getreg32(USB_SERIAL_JTAG_EP1_CONF_REG);
 
-  return regval & USB_SERIAL_JTAG_SERIAL_IN_EP_DATA_FREE;
+  if (regval & USB_SERIAL_JTAG_SERIAL_IN_EP_DATA_FREE)
+    {
+      g_host_absent = false;
+      return true;
+    }
+
+  if (g_host_absent)
+    {
+      return true;
+    }
+
+  return false;
 }
 
 /****************************************************************************
@@ -381,6 +446,15 @@ static bool esp32s3_txready(struct uart_dev_s *dev)
 
 static void esp32s3_send(struct uart_dev_s *dev, int ch)
 {
+  /* Drop the character when the host is absent and the endpoint is busy */
+
+  if (g_host_absent &&
+      !(getreg32(USB_SERIAL_JTAG_EP1_CONF_REG) &
+        USB_SERIAL_JTAG_SERIAL_IN_EP_DATA_FREE))
+    {
+      return;
+    }
+
   /* Write the character to the buffer. */
 
   putreg32(ch, USB_SERIAL_JTAG_EP1_REG);
