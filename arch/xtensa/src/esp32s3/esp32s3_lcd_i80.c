@@ -481,6 +481,57 @@ static int i80_write_direct(FAR struct lcd_i80_s *priv, int cmd,
   size_t chunk_rows = LCD_I80_MAXROWS / per_row;
   int ret = OK;
 
+  /* Packed rows in internal RAM are one byte stream for the panel: describe
+   * it in full pieces, so every descriptor but the last starts on a word
+   * and holds a multiple of 4 bytes.  GDMA bursts corrupt a chain of
+   * per-row descriptors whose rows start off a word (rows of an odd number
+   * of pixels, as a software-rotated flush of an odd-height area makes).
+   */
+
+  if (stride == row_bytes && ((uintptr_t)buf & 3) == 0 &&
+      !esp32s3_ptr_extram(buf))
+    {
+      size_t total = row_bytes * rows;
+      size_t max_len = (size_t)LCD_I80_MAXROWS * LCD_I80_PIECE_MAX;
+
+      while (total > 0 && ret == OK)
+        {
+          size_t len = total < max_len ? total : max_len;
+          size_t left = len;
+          FAR const uint8_t *p = buf;
+          int nd = 0;
+
+          while (left > 0)
+            {
+              size_t piece = left < LCD_I80_PIECE_MAX ?
+                             left : LCD_I80_PIECE_MAX;
+
+              left -= piece;
+              i80_mkdesc(&priv->desc[nd], p, piece, left == 0);
+              p += piece;
+              nd++;
+            }
+
+          i80_kick(priv, cmd, priv->desc, true);
+          if (priv->async && len == total)
+            {
+              priv->pending       = true;
+              priv->pending_nd    = nd;
+              priv->pending_start = i80_ccount();
+              return OK;
+            }
+
+          ret = i80_wait(priv);
+          i80_dma_check(priv, priv->desc, nd);
+
+          cmd    = -1;
+          buf   += len;
+          total -= len;
+        }
+
+      return ret;
+    }
+
   while (rows > 0 && ret == OK)
     {
       size_t n = rows < chunk_rows ? rows : chunk_rows;
