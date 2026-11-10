@@ -22,6 +22,8 @@
  * Included Files
  ****************************************************************************/
 
+#include <nuttx/semaphore.h>
+#include <nuttx/clock.h>
 #include <sys/types.h>
 
 #include <sys/socket.h>
@@ -111,8 +113,22 @@ static esp_vhci_host_callback_t vhci_host_cb =
  *
  ****************************************************************************/
 
+/* The controller takes one HCI packet at a time: it calls back when it can
+ * take the next one.  Like ESP-IDF's NimBLE port, a binary semaphore
+ * serialises the senders.
+ */
+
+static sem_t g_send_sem = SEM_INITIALIZER(1);
+
 static void esp32s3_ble_send_ready(void)
 {
+  int val = 0;
+
+  nxsem_get_value(&g_send_sem, &val);
+  if (val < 1)
+    {
+      nxsem_post(&g_send_sem);
+    }
 }
 
 /****************************************************************************
@@ -195,6 +211,7 @@ static int esp32s3_ble_send(struct bt_driver_s *drv,
                             void *data, size_t len)
 {
   uint8_t *hdr = (uint8_t *)data - drv->head_reserve;
+  int ret;
 
   if ((len + H4_HEADER_SIZE) > BLE_BUF_SIZE)
     {
@@ -218,10 +235,13 @@ static int esp32s3_ble_send(struct bt_driver_s *drv,
       return -EINVAL;
     }
 
-  if (esp32s3_vhci_host_check_send_available())
+  ret = nxsem_tickwait_uninterruptible(&g_send_sem, MSEC2TICK(2000));
+  if (ret < 0)
     {
-      esp32s3_vhci_host_send_packet(hdr, len + drv->head_reserve);
+      return ret;
     }
+
+  esp32s3_vhci_host_send_packet(hdr, len + drv->head_reserve);
 
   return len;
 }
