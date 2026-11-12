@@ -45,6 +45,7 @@
 #include <nuttx/signal.h>
 #include <nuttx/video/fb.h>
 #include <nuttx/lcd/lcd.h>
+#include <nuttx/lcd/lcd_trace.h>
 #include <nuttx/lcd/st7796.h>
 
 /****************************************************************************
@@ -326,11 +327,15 @@ static int st7796_i80_putarea(FAR struct lcd_dev_s *dev,
     }
 
   nxmutex_lock(&priv->lock);
+  LCD_TRACE_BEGIN("st7796.window");
   ret = st7796_i80_setwindow(priv, row_start, row_end, col_start, col_end);
+  LCD_TRACE_END();
   if (ret >= 0)
     {
+      LCD_TRACE_BEGIN("st7796.write");
       ret = priv->ops->write(ST7796_RAMWR, ST7796_RAMWRC, buffer, row_bytes,
                              row_end - row_start + 1, stride);
+      LCD_TRACE_END();
     }
 
   nxmutex_unlock(&priv->lock);

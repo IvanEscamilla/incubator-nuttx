@@ -54,6 +54,9 @@
  * NOTERAM_SETREADMODE
  *              - Set read mode
  *                Argument: A read-only pointer to unsigned int
+ * NOTERAM_GETSTATS (CONFIG_DRIVERS_NOTERAM_STATS)
+ *              - Get the note counters since the last NOTERAM_CLEAR
+ *                Argument: A writable pointer to struct noteram_stats_s
  */
 
 #ifdef CONFIG_DRIVERS_NOTERAM
@@ -62,6 +65,7 @@
 #define NOTERAM_SETMODE         _NOTERAMIOC(0x03)
 #define NOTERAM_GETREADMODE     _NOTERAMIOC(0x04)
 #define NOTERAM_SETREADMODE     _NOTERAMIOC(0x05)
+#define NOTERAM_GETSTATS        _NOTERAMIOC(0x06)
 #endif
 
 /* Overwrite mode definitions */
@@ -80,6 +84,16 @@
  ****************************************************************************/
 
 struct noteram_driver_s;
+
+#ifdef CONFIG_DRIVERS_NOTERAM_STATS
+struct noteram_stats_s
+{
+  unsigned long added;    /* Notes added since the last clear */
+  unsigned long dropped;  /* Notes removed by overwriting before being read */
+  unsigned long used;     /* Bytes in the buffer now */
+  unsigned long size;     /* Buffer size in bytes */
+};
+#endif
 
 /****************************************************************************
  * Public Data

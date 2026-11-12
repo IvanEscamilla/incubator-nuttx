@@ -32,7 +32,9 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <inttypes.h>
 #include <poll.h>
 
@@ -93,6 +95,10 @@ struct noteram_driver_s
   volatile unsigned int ni_head;
   volatile unsigned int ni_tail;
   volatile unsigned int ni_read;
+#ifdef CONFIG_DRIVERS_NOTERAM_STATS
+  unsigned long ni_added;
+  unsigned long ni_dropped;
+#endif
   spinlock_t lock;
   FAR struct pollfd *pfd;
   struct notifier_block nb;
@@ -152,11 +158,13 @@ static const struct file_operations g_noteram_fops =
   noteram_poll,  /* poll */
 };
 
+#ifndef CONFIG_DRIVERS_NOTERAM_USER_HEAP
 static
-#ifdef DRIVERS_NOTERAM_SECTION
+#  ifdef DRIVERS_NOTERAM_SECTION
 locate_data(DRIVERS_NOTERAM_SECTION)
-#endif
+#  endif
 uint8_t g_ramnote_buffer[CONFIG_DRIVERS_NOTERAM_BUFSIZE];
+#endif
 
 static const struct note_driver_ops_s g_noteram_ops =
 {
@@ -183,8 +191,13 @@ struct noteram_driver_s g_noteram_driver =
 #endif
     &g_noteram_ops
   },
+#ifdef CONFIG_DRIVERS_NOTERAM_USER_HEAP
+  NULL,       /* Allocated by noteram_register() */
+  0,
+#else
   g_ramnote_buffer,
   CONFIG_DRIVERS_NOTERAM_BUFSIZE,
+#endif
 #ifdef CONFIG_DRIVERS_NOTERAM_DEFAULT_NOOVERWRITE
   NOTERAM_MODE_OVERWRITE_DISABLE
 #else
@@ -214,6 +227,10 @@ static void noteram_buffer_clear(FAR struct noteram_driver_s *drv)
 {
   drv->ni_tail = drv->ni_head;
   drv->ni_read = drv->ni_head;
+#ifdef CONFIG_DRIVERS_NOTERAM_STATS
+  drv->ni_added = 0;
+  drv->ni_dropped = 0;
+#endif
 
   if (drv->ni_overwrite == NOTERAM_MODE_OVERWRITE_OVERFLOW)
     {
@@ -536,6 +553,30 @@ static int noteram_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
         ret = OK;
         break;
 
+#ifdef CONFIG_DRIVERS_NOTERAM_STATS
+      /* NOTERAM_GETSTATS
+       *      - Get the note counters since the last clear
+       *        Argument: A writable pointer to struct noteram_stats_s
+       */
+
+      case NOTERAM_GETSTATS:
+        if (arg == 0)
+          {
+            ret = -EINVAL;
+          }
+        else
+          {
+            FAR struct noteram_stats_s *st = (FAR struct noteram_stats_s *)arg;
+
+            st->added   = drv->ni_added;
+            st->dropped = drv->ni_dropped;
+            st->used    = noteram_length(drv);
+            st->size    = drv->ni_bufsize;
+            ret = OK;
+          }
+        break;
+#endif
+
       /* NOTERAM_GETMODE
        *      - Get overwrite mode
        *        Argument: A writable pointer to unsigned int
@@ -727,6 +768,15 @@ static void noteram_add(FAR struct note_driver_s *driver,
   unsigned int space;
   irqstate_t flags;
 
+#ifdef CONFIG_DRIVERS_NOTERAM_USER_HEAP
+  /* The buffer exists only after noteram_register() allocated it. */
+
+  if (drv->ni_buffer == NULL)
+    {
+      return;
+    }
+#endif
+
   flags = spin_lock_irqsave_notrace(&drv->lock);
 
   if (drv->ni_overwrite == NOTERAM_MODE_OVERWRITE_OVERFLOW)
@@ -755,6 +805,9 @@ static void noteram_add(FAR struct note_driver_s *driver,
       do
         {
           noteram_remove(drv);
+#ifdef CONFIG_DRIVERS_NOTERAM_STATS
+          drv->ni_dropped++;
+#endif
           remain = drv->ni_bufsize - noteram_length(drv);
         }
       while (remain <= NOTE_ALIGN(notelen));
@@ -766,6 +819,9 @@ static void noteram_add(FAR struct note_driver_s *driver,
   memcpy(drv->ni_buffer + head, note, space);
   memcpy(drv->ni_buffer, buf + space, notelen - space);
   drv->ni_head = noteram_next(drv, head, NOTE_ALIGN(notelen));
+#ifdef CONFIG_DRIVERS_NOTERAM_STATS
+  drv->ni_added++;
+#endif
   spin_unlock_irqrestore_notrace(&drv->lock, flags);
 
   if (drv->pfd && (noteram_unread_length(drv) >= drv->threshold))
@@ -1356,6 +1412,26 @@ static void noteram_crash_dump_register(FAR struct noteram_driver_s *drv)
 
 int noteram_register(void)
 {
+#ifdef CONFIG_DRIVERS_NOTERAM_USER_HEAP
+  FAR uint8_t *buffer;
+
+  /* The buffer comes from the user heap (PSRAM on the ESP32-S3).  On
+   * failure the driver stays unregistered: noteram_add() ignores notes while
+   * the buffer is NULL, and the system goes on booting.
+   */
+
+  buffer = malloc(CONFIG_DRIVERS_NOTERAM_BUFSIZE);
+  if (buffer == NULL)
+    {
+      syslog(LOG_ERR, "noteram: cannot allocate %d bytes, "
+             "tracing unavailable\n", CONFIG_DRIVERS_NOTERAM_BUFSIZE);
+      return OK;
+    }
+
+  g_noteram_driver.ni_bufsize = CONFIG_DRIVERS_NOTERAM_BUFSIZE;
+  g_noteram_driver.ni_buffer  = buffer;
+#endif
+
 #ifdef CONFIG_DRIVERS_NOTERAM_CRASH_DUMP
   noteram_crash_dump_register(&g_noteram_driver);
 #endif

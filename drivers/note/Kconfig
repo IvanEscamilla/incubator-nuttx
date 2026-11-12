@@ -67,9 +67,31 @@ if DRIVERS_NOTERAM
 
 config DRIVERS_NOTERAM_BUFSIZE
 	int "Note RAM buffer size"
+	default 262144 if DRIVERS_NOTERAM_USER_HEAP
 	default 2048
 	---help---
 		The size of the in-memory, circular instrumentation buffer (in bytes).
+
+config DRIVERS_NOTERAM_USER_HEAP
+	bool "Allocate the note RAM buffer from the user heap"
+	default n
+	---help---
+		Allocate the circular buffer with malloc() when the driver is
+		registered, instead of using a static array in .bss.  In a flat build
+		the user heap can be a larger, slower memory than the kernel heap
+		(PSRAM on the ESP32-S3), so a large trace buffer does not use
+		internal RAM.  No notes are recorded until the allocation succeeded;
+		if it fails, the driver stays unregistered (one line is logged) and
+		the system continues to boot.  Needs a flat or protected build where
+		malloc() is available to the kernel.
+
+config DRIVERS_NOTERAM_STATS
+	bool "Note RAM statistics ioctl"
+	default n
+	---help---
+		Count the notes added to the circular buffer and the notes removed
+		by overwriting, and report them (with the bytes in use) through the
+		NOTERAM_GETSTATS ioctl.  The counters restart with NOTERAM_CLEAR.
 
 config DRIVERS_NOTERAM_SECTION
 	string "Note RAM section"

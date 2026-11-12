@@ -27,6 +27,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <nuttx/arch.h>
 #include <nuttx/init.h>
 #include <nuttx/irq.h>
 
@@ -362,6 +363,16 @@ noinstrument_function void noreturn_function IRAM_ATTR __esp32s3_start(void)
   /* Initialize RTC controller and set CPU frequency */
 
   esp_clk_init();
+
+#ifdef CONFIG_ARCH_PERF_EVENTS
+  /* The perf clock (note timestamps, perf_gettime()) counts CPU cycles of
+   * the Xtensa CCOUNT register; tell it the frequency set above, or
+   * perf_convert() divides by ULONG_MAX.
+   */
+
+  up_perf_init((void *)(uintptr_t)(CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ *
+                                   1000000ul));
+#endif
 
   /* Initialize peripherals parameters */
 

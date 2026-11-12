@@ -44,6 +44,7 @@
 #include <nuttx/clock.h>
 #include <nuttx/irq.h>
 #include <nuttx/kmalloc.h>
+#include <nuttx/lcd/lcd_trace.h>
 #include <nuttx/mutex.h>
 #include <nuttx/semaphore.h>
 
@@ -345,6 +346,8 @@ static void i80_kick(FAR struct lcd_i80_s *priv, int cmd,
 {
   lcd_cam_dev_t *dev = LCD_I80_DEV;
 
+  LCD_TRACE_BEGIN("i80.kick");
+
   while (nxsem_trywait(&priv->done) == 0)
     {
     }
@@ -376,6 +379,7 @@ static void i80_kick(FAR struct lcd_i80_s *priv, int cmd,
     }
 
   lcd_ll_start(dev);
+  LCD_TRACE_END();
 }
 
 /****************************************************************************
@@ -390,6 +394,7 @@ static int i80_wait(FAR struct lcd_i80_s *priv)
 {
   int ret;
 
+  LCD_TRACE_BEGIN("i80.wait");
   ret = nxsem_tickwait_uninterruptible(&priv->done,
                                        MSEC2TICK(LCD_I80_TIMEOUT_MS));
   if (ret < 0)
@@ -399,9 +404,11 @@ static int i80_wait(FAR struct lcd_i80_s *priv)
       lcd_ll_fifo_reset(LCD_I80_DEV);
       esp32s3_dma_reset_channel(priv->chan, true);
       lcderr("ERROR: i80 transfer timeout\n");
+      LCD_TRACE_END();
       return -ETIMEDOUT;
     }
 
+  LCD_TRACE_END();
   return OK;
 }
 
@@ -424,10 +431,12 @@ static int i80_finish(FAR struct lcd_i80_s *priv)
       return OK;
     }
 
+  LCD_TRACE_BEGIN("i80.finish");
   priv->pending = false;
   ret = i80_wait(priv);
   i80_dma_check(priv, priv->desc, priv->pending_nd);
   priv->stats.last_xfer_us = i80_us(priv->pending_start);
+  LCD_TRACE_END();
   return ret;
 }
 
@@ -444,6 +453,7 @@ static void i80_copy_rows(FAR uint8_t *dst, size_t len,
                           FAR const uint8_t *src, size_t row_bytes,
                           size_t stride, FAR size_t *row, FAR size_t *off)
 {
+  LCD_TRACE_BEGIN("i80.bounce");
   while (len > 0)
     {
       size_t n = row_bytes - *off;
@@ -463,6 +473,8 @@ static void i80_copy_rows(FAR uint8_t *dst, size_t len,
           (*row)++;
         }
     }
+
+  LCD_TRACE_END();
 }
 
 /****************************************************************************
@@ -981,8 +993,10 @@ int esp32s3_lcd_i80_wait_te(uint32_t timeout_ms)
     }
 
   start = i80_ccount();
+  LCD_TRACE_BEGIN("i80.te");
   ret = nxsem_tickwait_uninterruptible(&priv->te_sem,
                                        MSEC2TICK(timeout_ms));
+  LCD_TRACE_END();
   priv->stats.last_te_us = i80_us(start);
   if (ret < 0)
     {
