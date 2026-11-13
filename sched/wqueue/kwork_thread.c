@@ -44,6 +44,10 @@
 #include "sched/sched.h"
 #include "wqueue/wqueue.h"
 
+#ifdef CONFIG_SCHED_INSTRUMENTATION_WORKQ
+#  include <nuttx/sched_note.h>
+#endif
+
 #if defined(CONFIG_SCHED_WORKQUEUE)
 
 /****************************************************************************
@@ -115,6 +119,38 @@ struct lp_wqueue_s g_lpwork =
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+#ifdef CONFIG_SCHED_INSTRUMENTATION_WORKQ
+/* Names each work item in the trace: "lpw:4208a1b4" or "hpw:..." is the
+ * address of the worker function (resolve it with addr2line on the image).
+ * The note keeps a copy of the string. */
+
+static void work_note_begin(FAR struct kwork_wqueue_s *wq, worker_t worker)
+{
+  static const char hex[] = "0123456789abcdef";
+  char name[16];
+  uintptr_t a = (uintptr_t)worker;
+  int i;
+
+#  ifdef CONFIG_SCHED_LPWORK
+  const bool lp = wq == &g_lpwork.wq;
+#  else
+  const bool lp = false;
+#  endif
+
+  name[0] = lp ? 'l' : 'h';
+  name[1] = 'p';
+  name[2] = 'w';
+  name[3] = ':';
+  for (i = 0; i < 8; i++)
+    {
+      name[4 + i] = hex[(a >> (28 - 4 * i)) & 0xf];
+    }
+
+  name[12] = '\0';
+  sched_note_beginex(NOTE_TAG_APP, name);
+}
+#endif
 
 static inline_function
 void work_dispatch(FAR struct kwork_wqueue_s *wq)
@@ -252,7 +288,13 @@ static int work_thread(int argc, FAR char *argv[])
            * performed... we don't have any idea how long this will take!
            */
 
+#ifdef CONFIG_SCHED_INSTRUMENTATION_WORKQ
+          work_note_begin(wqueue, worker);
+#endif
           CALL_WORKER(worker, arg);
+#ifdef CONFIG_SCHED_INSTRUMENTATION_WORKQ
+          sched_note_end(NOTE_TAG_APP);
+#endif
           flags = spin_lock_irqsave_nopreempt(&wqueue->lock);
 
           /* Mark the thread un-busy */

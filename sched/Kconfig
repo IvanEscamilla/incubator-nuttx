@@ -1305,6 +1305,17 @@ config SCHED_INSTRUMENTATION_DUMP
 			void sched_note_vprintf_ip(uint32_t tag, uintptr_t ip, FAR const char *fmt, uint32_t type, va_list va) printf_like(3, 0);
 			void sched_note_printf_ip(uint32_t tag, uintptr_t ip, FAR const char *fmt, uint32_t type, ...) printf_like(3, 5);
 
+config SCHED_INSTRUMENTATION_WORKQ
+	bool "Record kernel work queue items as sections"
+	default n
+	depends on SCHED_INSTRUMENTATION_DUMP && SCHED_WORKQUEUE
+	---help---
+		Every item run by a kernel work queue thread (HPWORK, LPWORK) is
+		recorded as a section named "hpw:<address>" or "lpw:<address>",
+		the address being the worker function. Resolve it with addr2line on
+		the image. For finding out what runs on the work queues; off in
+		production.
+
 config SCHED_INSTRUMENTATION_FUNCTION
 	bool "Enable function auto-tracing"
 	default n
