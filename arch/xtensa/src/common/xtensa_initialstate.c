@@ -232,6 +232,12 @@ void up_initial_state(struct tcb_s *tcb)
                               (uint32_t)&_rodata_reserved_start) - base;
 #endif
 
+#if XCHAL_CP_NUM > 0
+  /* The thread starts with the co-processors of CONFIG_XTENSA_CP_INITSET */
+
+  xcp->regs[REG_CPENABLE] = CONFIG_XTENSA_CP_INITSET;
+#endif
+
   /* Set initial PS to int level 0, user mode. */
 
 #ifdef __XTENSA_CALL0_ABI__

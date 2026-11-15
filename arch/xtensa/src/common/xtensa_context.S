@@ -209,6 +209,13 @@ _xtensa_context_save:
 #endif
 
 #if XCHAL_CP_NUM > 0
+	/* Save the CPENABLE of the interrupted thread in its frame.  The
+	 * co-processor areas saved below are those it names.
+	 */
+
+	rsr		a3, CPENABLE
+	s32i		a3, sp, (4 * REG_CPENABLE)
+
 	xtensa_coproc_savestate
 #endif
 
@@ -253,6 +260,15 @@ _xtensa_context_save:
 _xtensa_context_restore:
 
 #if XCHAL_CP_NUM > 0
+	/* Make the incoming thread's CPENABLE the core's before its areas are
+	 * loaded: xtensa_coproc_restorestate reads CPENABLE to decide which
+	 * areas to load.  a3 is free here (the macro trashes a3-a8).
+	 */
+
+	l32i		a3, a2, (4 * REG_CPENABLE)
+	wsr		a3, CPENABLE
+	rsync
+
 	xtensa_coproc_restorestate
 #endif
 

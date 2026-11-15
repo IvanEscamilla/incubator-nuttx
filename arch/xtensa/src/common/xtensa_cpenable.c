@@ -32,9 +32,45 @@
 #include <arch/xtensa/xtensa_coproc.h>
 #include <arch/chip/core-isa.h>
 
+#include <arch/irq.h>
+
+#include "sched/sched.h"
 #include "xtensa.h"
 
 #if XCHAL_CP_NUM > 0
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name: xtensa_cpenable_slot
+ *
+ * Description:
+ *   CPENABLE belongs to the thread: it is stored in the register frame at
+ *   every context save (REG_CPENABLE) and written back at every restore.
+ *
+ *   While a thread runs in thread context it has no valid frame
+ *   (xcp.regs is NULL), and the CPENABLE register is the truth: the next
+ *   save stores it.  Nothing else has to be updated.
+ *
+ *   When the caller runs with a valid frame of the running thread (an
+ *   interrupt or a system call), the restore on return would overwrite the
+ *   register with the stale slot, so the slot is updated too.
+ *
+ *   Called with interrupts disabled, so the running thread cannot change.
+ *
+ ****************************************************************************/
+
+static void xtensa_cpenable_slot(uint32_t cpenable)
+{
+  struct tcb_s *tcb = running_task();
+
+  if (tcb != NULL && tcb->xcp.regs != NULL)
+    {
+      tcb->xcp.regs[REG_CPENABLE] = cpenable;
+    }
+}
 
 /****************************************************************************
  * Private Data
@@ -78,6 +114,7 @@ void xtensa_coproc_enable(int cpset)
       cpenable = xtensa_get_cpenable();
       cpenable |= cpset;
       xtensa_set_cpenable(cpenable);
+      xtensa_cpenable_slot(cpenable);
     }
 
   spin_unlock_irqrestore(&g_lock, flags);
@@ -115,6 +152,7 @@ void xtensa_coproc_disable(int cpset)
       cpenable = xtensa_get_cpenable();
       cpenable &= ~cpset;
       xtensa_set_cpenable(cpenable);
+      xtensa_cpenable_slot(cpenable);
     }
 
   spin_unlock_irqrestore(&g_lock, flags);

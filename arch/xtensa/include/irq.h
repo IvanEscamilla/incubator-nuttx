@@ -147,9 +147,22 @@
 /* Storage for overlay state */
 
 #  error Overlays not supported
-#  define _REG_CP_START  _REG_OVLY_START
+#  define _REG_CPENABLE_START  _REG_OVLY_START
 #else
-#  define _REG_CP_START  _REG_OVLY_START
+#  define _REG_CPENABLE_START  _REG_OVLY_START
+#endif
+
+#if XCHAL_CP_NUM > 0
+/* CPENABLE of the thread: the set of co-processors it has enabled.  It is
+ * saved with the context before the co-processor areas and written back
+ * before they are restored, so enabling a co-processor is a property of the
+ * thread, not of the core.
+ */
+
+#  define REG_CPENABLE     (_REG_CPENABLE_START + 0)
+#  define _REG_CP_START    (_REG_CPENABLE_START + 1)
+#else
+#  define _REG_CP_START    _REG_CPENABLE_START
 #endif
 
 #if XCHAL_CP_NUM > 0
