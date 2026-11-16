@@ -3073,4 +3073,14 @@ config ESP32S3_AES_ACCELERATOR_TEST
 
 endmenu # ESP32S3_AES_ACCELERATOR
 
+config ESP32S3_PERF_SYSTIMER
+	bool "Use SYSTIMER as the perf clock"
+	depends on ARCH_PERF_EVENTS
+	default y if SMP
+	---help---
+		Use shared SYSTIMER unit 0 at 16 MHz for perf timestamps on SMP.
+		Xtensa CCOUNT is per CPU and makes interleaved scheduler notes use
+		different time bases.  Disable this on single-core images to preserve
+		the existing CCOUNT behaviour.
+
 endif # ARCH_CHIP_ESP32S3

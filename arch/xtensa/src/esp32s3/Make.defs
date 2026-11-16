@@ -33,6 +33,10 @@ CHIP_CSRCS += esp32s3_systemreset.c esp32s3_user.c esp32s3_allocateheap.c esp32s
 CHIP_CSRCS += esp32s3_wdt.c esp32s3_lowputc.c esp32s3_serial.c
 CHIP_CSRCS += esp32s3_rtc_gpio.c esp32s3_libc_stubs.c esp32s3_spi_timing.c
 
+ifeq ($(CONFIG_ESP32S3_PERF_SYSTIMER),y)
+CHIP_CSRCS += esp32s3_perf.c
+endif
+
 # Configuration-dependent ESP32-S3 files
 
 ifneq ($(CONFIG_ARCH_IDLE_CUSTOM),y)

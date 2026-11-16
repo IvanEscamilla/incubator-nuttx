@@ -365,13 +365,13 @@ noinstrument_function void noreturn_function IRAM_ATTR __esp32s3_start(void)
   esp_clk_init();
 
 #ifdef CONFIG_ARCH_PERF_EVENTS
-  /* The perf clock (note timestamps, perf_gettime()) counts CPU cycles of
-   * the Xtensa CCOUNT register; tell it the frequency set above, or
-   * perf_convert() divides by ULONG_MAX.
-   */
-
+  /* CCOUNT needs the CPU rate.  SYSTIMER owns its fixed 16 MHz rate. */
+#ifndef CONFIG_ESP32S3_PERF_SYSTIMER
   up_perf_init((void *)(uintptr_t)(CONFIG_ESP32S3_DEFAULT_CPU_FREQ_MHZ *
                                    1000000ul));
+#else
+  up_perf_init(NULL);
+#endif
 #endif
 
   /* Initialize peripherals parameters */

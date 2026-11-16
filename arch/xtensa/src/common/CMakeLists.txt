@@ -66,7 +66,6 @@ list(
   xtensa_mpu.c
   xtensa_nputs.c
   xtensa_oneshot.c
-  xtensa_perf.c
   xtensa_releasestack.c
   xtensa_registerdump.c
   xtensa_swint.c
@@ -74,6 +73,10 @@ list(
   xtensa_saveusercontext.c
   xtensa_usestack.c
   xtensa_tcbinfo.c)
+
+if(NOT CONFIG_ESP32S3_PERF_SYSTIMER)
+  list(APPEND SRCS xtensa_perf.c)
+endif()
 
 if(CONFIG_ENABLE_ALL_SIGNALS)
   list(APPEND SRCS xtensa_schedsigaction.c xtensa_sigdeliver.c)
