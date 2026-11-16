@@ -1,0 +1,21 @@
+diff --git a/components/upper_hal_gpio/src/gpio.c b/components/upper_hal_gpio/src/gpio.c
+index 56f9de87..05aac7f3 100644
+--- a/components/upper_hal_gpio/src/gpio.c
++++ b/components/upper_hal_gpio/src/gpio.c
+@@ -550,7 +550,7 @@ esp_err_t gpio_install_isr_service(int intr_alloc_flags)
+             // isr service already installed, free allocated resource
+             esp_os_exit_critical(&gpio_context.gpio_spinlock);
+             ret = ESP_ERR_INVALID_STATE;
+-            free(isr_func);
++            heap_caps_free(isr_func);
+         }
+     }
+ 
+@@ -602,6 +602,6 @@ esp_err_t gpio_uninstall_isr_service(void)
+     gpio_context.isr_core_id = GPIO_ISR_CORE_ID_UNINIT;
+     esp_os_exit_critical(&gpio_context.gpio_spinlock);
+     esp_intr_free(gpio_isr_handle_free);
+-    free(gpio_isr_func_free);
++    heap_caps_free(gpio_isr_func_free);
+     return ESP_OK;
+ }

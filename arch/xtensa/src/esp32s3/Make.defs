@@ -195,6 +195,7 @@ endif
 # Fetch source files and add them to build
 
 ESP_HAL_3RDPARTY_REPO = esp-hal-3rdparty
+ESP_HAL_3RDPARTY_PATCHES = $(ARCH_SRCDIR)/esp32s3/patches/esp-hal-3rdparty/*.patch
 ifndef ESP_HAL_3RDPARTY_VERSION
 	ESP_HAL_3RDPARTY_VERSION = b90b1837cb5ad24747deb4c895246037cc206ce5
 endif
@@ -273,6 +274,15 @@ ifneq ($(USE_NXTMPDIR_ESP_REPO_DIRECTLY),y)
 endif
 	$(Q) echo "Applying patches..."
 	$(Q) cd chip/$(ESP_HAL_3RDPARTY_REPO)/components/mbedtls/mbedtls && git apply ../../../nuttx/patches/components/mbedtls/mbedtls/*.patch
+	$(Q) for patch in $(ESP_HAL_3RDPARTY_PATCHES); do \
+		if git -C chip/$(ESP_HAL_3RDPARTY_REPO) apply --check $$patch >/dev/null 2>&1; then \
+			git -C chip/$(ESP_HAL_3RDPARTY_REPO) apply $$patch; \
+		elif git -C chip/$(ESP_HAL_3RDPARTY_REPO) apply --reverse --check $$patch >/dev/null 2>&1; then \
+			:; \
+		else \
+			echo "Unable to apply $$patch" >&2; exit 1; \
+		fi; \
+	done
 ifeq ($(CONFIG_ESPRESSIF_WIRELESS),y)
 ifneq ($(USE_NXTMPDIR_ESP_REPO_DIRECTLY),y)
 	$(Q) git -C chip/$(ESP_HAL_3RDPARTY_REPO) submodule --quiet update --init $(GIT_DEPTH_PARAMETER) components/esp_phy/lib components/esp_wifi/lib components/bt/controller/lib_esp32c3_family components/esp_coex/lib

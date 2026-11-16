@@ -1,0 +1,22 @@
+diff --git a/nuttx/src/components/esp_system/esp_ipc.c b/nuttx/src/components/esp_system/esp_ipc.c
+index 7f5327be..c4b838bc 100644
+--- a/nuttx/src/components/esp_system/esp_ipc.c
++++ b/nuttx/src/components/esp_system/esp_ipc.c
+@@ -295,6 +295,17 @@ static esp_err_t esp_ipc_call_and_wait(uint32_t cpu_id, esp_ipc_func_t func,
+       return ESP_ERR_INVALID_ARG;
+     }
+ 
++  /* A local call needs neither an IPC task nor a running scheduler.  In
++   * particular, early initialization invokes the GPIO ISR registration
++   * before esp_ipc_init() can create the per-CPU IPC tasks.
++   */
++
++  if (cpu_id == up_cpu_index())
++    {
++      func(arg);
++      return ESP_OK;
++    }
++
+   if (s_ipc_task_handle[cpu_id] == NULL)
+     {
+       return ESP_ERR_INVALID_STATE;
