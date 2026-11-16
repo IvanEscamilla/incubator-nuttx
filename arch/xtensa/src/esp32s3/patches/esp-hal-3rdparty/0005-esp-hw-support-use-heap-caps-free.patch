@@ -1,0 +1,110 @@
+diff --git a/components/esp_hw_support/intr_alloc.c b/components/esp_hw_support/intr_alloc.c
+index 9395bc73d14..fb7cdf327b6 100644
+--- a/components/esp_hw_support/intr_alloc.c
++++ b/components/esp_hw_support/intr_alloc.c
+@@ -593,7 +593,7 @@ esp_err_t esp_intr_alloc_intrstatus_bind(int source, int flags, uint32_t intrsta
+     if (intr == -1) {
+         //None found. Bail out.
+         esp_os_exit_critical(&spinlock);
+-        free(ret);
++        heap_caps_free(ret);
+         ESP_LOGE(TAG, "No free interrupt inputs for %s interrupt (flags 0x%X)", esp_isr_names[source], flags);
+         return ESP_ERR_NOT_FOUND;
+     }
+@@ -601,6 +601,6 @@ esp_err_t esp_intr_alloc_intrstatus_bind(int source, int flags, uint32_t intrsta
+     vector_desc_t *vd = get_desc_for_int(intr, cpu);
+     if (vd == NULL) {
+         esp_os_exit_critical(&spinlock);
+-        free(ret);
++        heap_caps_free(ret);
+         return ESP_ERR_NO_MEM;
+     }
+@@ -611,7 +611,7 @@ esp_err_t esp_intr_alloc_intrstatus_bind(int source, int flags, uint32_t intrsta
+         shared_vector_desc_t *sh_vec = heap_caps_malloc(sizeof(shared_vector_desc_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+         if (sh_vec == NULL) {
+             esp_os_exit_critical(&spinlock);
+-            free(ret);
++            heap_caps_free(ret);
+             return ESP_ERR_NO_MEM;
+         }
+         memset(sh_vec, 0, sizeof(shared_vector_desc_t));
+@@ -634,7 +634,7 @@ esp_err_t esp_intr_alloc_intrstatus_bind(int source, int flags, uint32_t intrsta
+             non_shared_isr_arg_t *ns_isr_arg = heap_caps_malloc(sizeof(non_shared_isr_arg_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+             if (!ns_isr_arg) {
+                 esp_os_exit_critical(&spinlock);
+-                free(ret);
++                heap_caps_free(ret);
+                 return ESP_ERR_NO_MEM;
+             }
+             ns_isr_arg->isr = handler;
+@@ -704,7 +704,7 @@ esp_err_t esp_intr_alloc_intrstatus_bind(int source, int flags, uint32_t intrsta
+     if (ret_handle != NULL) {
+         *ret_handle = ret;
+     } else {
+-        free(ret);
++        heap_caps_free(ret);
+     }
+ 
+     ESP_EARLY_LOGD(TAG, "Connected src %d to int %d (cpu %"PRIu32")", source, intr, cpu);
+@@ -812,7 +812,7 @@ static esp_err_t intr_free_for_current_cpu(intr_handle_t handle)
+                 } else {
+                     handle->vector_desc->shared_vec_info = svd->next;
+                 }
+-                free(svd);
++                heap_caps_free(svd);
+                 break;
+             }
+             prevsvd = svd;
+@@ -834,7 +834,7 @@ static esp_err_t intr_free_for_current_cpu(intr_handle_t handle)
+         if (!free_shared_vector) {
+             void *isr_arg = esp_cpu_intr_get_handler_arg(handle->vector_desc->intno);
+             if (isr_arg) {
+-                free(isr_arg);
++                heap_caps_free(isr_arg);
+             }
+         }
+ #endif
+@@ -854,7 +854,7 @@ static esp_err_t intr_free_for_current_cpu(intr_handle_t handle)
+         non_iram_int_mask[handle->vector_desc->cpu] &= ~(1<<(handle->vector_desc->intno));
+     }
+     esp_os_exit_critical(&spinlock);
+-    free(handle);
++    heap_caps_free(handle);
+     return ESP_OK;
+ }
+ 
+diff --git a/components/esp_hw_support/rtc_module.c b/components/esp_hw_support/rtc_module.c
+index 29391642540..dd018485d3f 100644
+--- a/components/esp_hw_support/rtc_module.c
++++ b/components/esp_hw_support/rtc_module.c
+@@ -151,7 +151,7 @@ esp_err_t rtc_isr_deregister(intr_handler_t handler, void* handler_arg)
+             if (it->flags & RTC_INTR_FLAG_IRAM) {
+                 s_rtc_isr_noniram_hook_relieve(it->mask);
+             }
+-            free(it);
++            heap_caps_free(it);
+             break;
+         }
+         prev = it;
+diff --git a/components/esp_hw_support/sleep_event.c b/components/esp_hw_support/sleep_event.c
+index 498dd5c8f83..d5415d56c37 100644
+--- a/components/esp_hw_support/sleep_event.c
++++ b/components/esp_hw_support/sleep_event.c
+@@ -35,7 +35,7 @@ esp_err_t esp_sleep_register_event_callback(esp_sleep_event_cb_index_t event_id,
+     esp_sleep_event_cb_config_t **current_ptr = &(g_sleep_event_cbs_config.sleep_event_cb_config[event_id]);
+     while (*current_ptr != NULL) {
+         if (((*current_ptr)->cb) == (event_cb_conf->cb)) {
+-            free(new_config);
++            heap_caps_free(new_config);
+             esp_os_exit_critical(&s_sleep_event_mutex);
+             return ESP_FAIL;
+         }
+@@ -62,7 +62,7 @@ esp_err_t esp_sleep_unregister_event_callback(esp_sleep_event_cb_index_t event_i
+         if (((*current_ptr)->cb) == cb) {
+             esp_sleep_event_cb_config_t *temp = *current_ptr;
+             *current_ptr = (*current_ptr)->next;
+-            free(temp);
++            heap_caps_free(temp);
+             break;
+         }
+         current_ptr = &((*current_ptr)->next);

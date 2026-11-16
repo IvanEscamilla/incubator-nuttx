@@ -1,0 +1,22 @@
+diff --git a/components/esp_pm/pm_impl.c b/components/esp_pm/pm_impl.c
+index d44634aa331..f5324add8ec 100644
+--- a/components/esp_pm/pm_impl.c
++++ b/components/esp_pm/pm_impl.c
+@@ -330,7 +330,7 @@ esp_err_t esp_pm_light_sleep_unregister_cbs(esp_pm_sleep_cbs_register_config_t *
+             if ((*current_enter_ptr)->cb == cbs_conf->enter_cb) {
+                 esp_pm_sleep_cb_config_t *temp = *current_enter_ptr;
+                 *current_enter_ptr = (*current_enter_ptr)->next;
+-                free(temp);
++                heap_caps_free(temp);
+                 break;
+             }
+             current_enter_ptr = &((*current_enter_ptr)->next);
+@@ -343,7 +343,7 @@ esp_err_t esp_pm_light_sleep_unregister_cbs(esp_pm_sleep_cbs_register_config_t *
+             if ((*current_exit_ptr)->cb == cbs_conf->exit_cb) {
+                 esp_pm_sleep_cb_config_t *temp = *current_exit_ptr;
+                 *current_exit_ptr = (*current_exit_ptr)->next;
+-                free(temp);
++                heap_caps_free(temp);
+                 break;
+             }
+             current_exit_ptr = &((*current_exit_ptr)->next);

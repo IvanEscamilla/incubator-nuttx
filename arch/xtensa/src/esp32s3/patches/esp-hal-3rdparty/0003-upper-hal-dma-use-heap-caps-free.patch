@@ -1,0 +1,112 @@
+diff --git a/components/upper_hal_dma/src/esp_dma_utils.c b/components/upper_hal_dma/src/esp_dma_utils.c
+index 9836f7670a9..579e2d23176 100644
+--- a/components/upper_hal_dma/src/esp_dma_utils.c
++++ b/components/upper_hal_dma/src/esp_dma_utils.c
+@@ -121,7 +121,7 @@ esp_err_t esp_dma_split_rx_buffer_to_cache_aligned(void *rx_buffer, size_t buffe
+ err:
+     // Only free the stash buffer if it is not offered by the caller
+     if (stash_buffer && *ret_stash_buffer == NULL) {
+-        free(stash_buffer);
++        heap_caps_free(stash_buffer);
+     }
+     return ret;
+ }
+diff --git a/components/upper_hal_dma/src/gdma.c b/components/upper_hal_dma/src/gdma.c
+index 12468e2dde2..ef2cca043b5 100644
+--- a/components/upper_hal_dma/src/gdma.c
++++ b/components/upper_hal_dma/src/gdma.c
+@@ -223,10 +223,10 @@ err:
+     }
+     // Free the channel structures after clearing the pair pointers
+     if (alloc_tx_channel) {
+-        free(alloc_tx_channel);
++        heap_caps_free(alloc_tx_channel);
+     }
+     if (alloc_rx_channel) {
+-        free(alloc_rx_channel);
++        heap_caps_free(alloc_rx_channel);
+     }
+ 
+ #if CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP && SOC_GDMA_SUPPORT_SLEEP_RETENTION
+@@ -717,7 +717,7 @@ static void gdma_try_free_group_handle(gdma_group_t *group)
+     esp_os_exit_critical(&s_platform.spinlock);
+ 
+     if (do_deinitialize) {
+-        free(group);
++        heap_caps_free(group);
+         ESP_LOGV(TAG, "del group %d", group_id);
+     }
+ }
+@@ -759,7 +759,7 @@ static gdma_group_t *gdma_try_alloc_group_handle(int group_id, void (*hal_init)(
+     if (new_group) {
+         ESP_LOGV(TAG, "new group (%d) at %p", group_id, group);
+     } else {
+-        free(pre_alloc_group);
++        heap_caps_free(pre_alloc_group);
+     }
+ out:
+     return group;
+@@ -794,7 +794,7 @@ static void gdma_try_free_pair_handle(gdma_pair_t *pair)
+     }
+ 
+     if (do_deinitialize) {
+-        free(pair);
++        heap_caps_free(pair);
+         ESP_LOGV(TAG, "del pair (%d,%d)", group->group_id, pair_id);
+         gdma_try_free_group_handle(group);
+     }
+@@ -828,7 +828,7 @@ static gdma_pair_t *gdma_try_alloc_pair_handle(gdma_group_t *group, int pair_id)
+     if (new_pair) {
+         ESP_LOGV(TAG, "new pair (%d,%d) at %p", group->group_id, pair_id, pair);
+     } else {
+-        free(pre_alloc_pair);
++        heap_caps_free(pre_alloc_pair);
+     }
+ 
+ out:
+@@ -858,7 +858,7 @@ static esp_err_t gdma_del_tx_channel(gdma_channel_t *dma_channel)
+         ESP_LOGV(TAG, "uninstall interrupt service for tx channel (%d,%d)", group_id, pair_id);
+     }
+ 
+-    free(tx_chan);
++    heap_caps_free(tx_chan);
+     ESP_LOGV(TAG, "del tx channel (%d,%d)", group_id, pair_id);
+ 
+ #if CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP && SOC_GDMA_SUPPORT_SLEEP_RETENTION
+@@ -893,7 +893,7 @@ static esp_err_t gdma_del_rx_channel(gdma_channel_t *dma_channel)
+         ESP_LOGV(TAG, "uninstall interrupt service for rx channel (%d,%d)", group_id, pair_id);
+     }
+ 
+-    free(rx_chan);
++    heap_caps_free(rx_chan);
+     ESP_LOGV(TAG, "del rx channel (%d,%d)", group_id, pair_id);
+ 
+ #if CONFIG_PM_POWER_DOWN_PERIPHERAL_IN_LIGHT_SLEEP && SOC_GDMA_SUPPORT_SLEEP_RETENTION
+diff --git a/components/upper_hal_dma/src/gdma_link.c b/components/upper_hal_dma/src/gdma_link.c
+index 0b4a6bde431..bc576be1259 100644
+--- a/components/upper_hal_dma/src/gdma_link.c
++++ b/components/upper_hal_dma/src/gdma_link.c
+@@ -131,10 +131,10 @@ esp_err_t gdma_new_link_list(const gdma_link_list_config_t *config, gdma_link_li
+ 
+ err:
+     if (list) {
+-        free(list);
++        heap_caps_free(list);
+     }
+     if (items) {
+-        free(items);
++        heap_caps_free(items);
+     }
+     return ret;
+ }
+@@ -143,8 +143,8 @@ esp_err_t gdma_del_link_list(gdma_link_list_handle_t list)
+ {
+     ESP_RETURN_ON_FALSE(list, ESP_ERR_INVALID_ARG, TAG, "invalid argument");
+     ESP_LOGD(TAG, "del link list at %p", list);
+-    free(list->items);
+-    free(list);
++    heap_caps_free(list->items);
++    heap_caps_free(list);
+     return ESP_OK;
+ }
+ 

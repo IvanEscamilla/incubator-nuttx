@@ -1,0 +1,22 @@
+diff --git a/components/esp_phy/src/phy_init.c b/components/esp_phy/src/phy_init.c
+index 492d83dc53c..e85cb0dc3f0 100644
+--- a/components/esp_phy/src/phy_init.c
++++ b/components/esp_phy/src/phy_init.c
+@@ -486,7 +486,7 @@ void esp_phy_modem_deinit(void)
+     if (s_phy_modem_init_ref == 0) {
+ #if SOC_PM_MODEM_RETENTION_BY_BACKUPDMA
+         s_is_phy_reg_stored = false;
+-        free(s_phy_digital_regs_mem);
++        heap_caps_free(s_phy_digital_regs_mem);
+         s_phy_digital_regs_mem = NULL;
+         /* Fix the issue caused by the power domain off.
+         * This issue is only on ESP32C3.
+@@ -532,7 +532,7 @@ void esp_mac_bb_pd_mem_deinit(void)
+     _lock_acquire(&s_phy_access_lock);
+     s_macbb_backup_mem_ref--;
+     if (s_macbb_backup_mem_ref == 0) {
+-        free(s_mac_bb_pd_mem);
++        heap_caps_free(s_mac_bb_pd_mem);
+         s_mac_bb_pd_mem = NULL;
+     }
+     _lock_release(&s_phy_access_lock);

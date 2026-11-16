@@ -1,0 +1,69 @@
+diff --git a/components/spi_flash/esp_flash_spi_init.c b/components/spi_flash/esp_flash_spi_init.c
+index b680d06b77a..4bb0e729879 100644
+--- a/components/spi_flash/esp_flash_spi_init.c
++++ b/components/spi_flash/esp_flash_spi_init.c
+@@ -452,8 +452,8 @@ esp_err_t spi_bus_remove_flash_device(esp_flash_t *chip)
+     if (dev_handle) {
+         spi_bus_lock_unregister_dev(dev_handle);
+     }
+-    free(chip->host);
+-    free(chip);
++    heap_caps_free(chip->host);
++    heap_caps_free(chip);
+     return ESP_OK;
+ }
+ 
+diff --git a/components/spi_flash/flash_mmap.c b/components/spi_flash/flash_mmap.c
+index 93400c00e25..77aa1e31807 100644
+--- a/components/spi_flash/flash_mmap.c
++++ b/components/spi_flash/flash_mmap.c
+@@ -111,10 +111,10 @@ esp_err_t spi_flash_mmap(size_t src_addr, size_t size, spi_flash_mmap_memory_t m
+ 
+ err:
+     if (vaddr_list) {
+-        free(vaddr_list);
++        heap_caps_free(vaddr_list);
+     }
+     if (block) {
+-        free(block);
++        heap_caps_free(block);
+     }
+     return ret;
+ }
+@@ -229,10 +229,10 @@ err:
+         esp_mmu_unmap((void *)vaddr_list[i]);
+     }
+     if (vaddr_list) {
+-        free(vaddr_list);
++        heap_caps_free(vaddr_list);
+     }
+     if (block) {
+-        free(block);
++        heap_caps_free(block);
+     }
+     return ret;
+ }
+@@ -250,8 +250,8 @@ void spi_flash_munmap(spi_flash_mmap_handle_t handle)
+         }
+     }
+ 
+-    free(block->vaddr_list);
+-    free(block);
++    heap_caps_free(block->vaddr_list);
++    heap_caps_free(block);
+ }
+ 
+ 
+diff --git a/components/spi_flash/spi_flash_os_func_app.c b/components/spi_flash/spi_flash_os_func_app.c
+index 1f912bd48b1..e5f25fee931 100644
+--- a/components/spi_flash/spi_flash_os_func_app.c
++++ b/components/spi_flash/spi_flash_os_func_app.c
+@@ -372,7 +372,7 @@ esp_err_t esp_flash_deinit_os_functions(esp_flash_t* chip, spi_bus_lock_dev_hand
+     if (chip->os_func_data) {
+         // SPI bus lock is possibly not used on SPI1 bus
+         *out_dev_handle = ((app_func_arg_t*)chip->os_func_data)->dev_lock;
+-        free(chip->os_func_data);
++        heap_caps_free(chip->os_func_data);
+     }
+     chip->os_func = NULL;
+     chip->os_func_data = NULL;

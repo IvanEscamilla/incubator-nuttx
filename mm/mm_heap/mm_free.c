@@ -27,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <assert.h>
+#include <syslog.h>
 #include <nuttx/debug.h>
 
 #include <nuttx/arch.h>
@@ -239,6 +240,23 @@ void mm_free(FAR struct mm_heap_s *heap, FAR void *mem)
     {
       return;
     }
+
+#ifdef CONFIG_DEBUG_ASSERTIONS
+  /*
+   * Do this before inspecting the allocation header.  With separate user
+   * and kernel heaps, a wrong-heap free otherwise turns a valid node from
+   * the other heap into a free-list node in this heap.
+   */
+
+  if (!mm_heapmember(heap, mem))
+    {
+      syslog(LOG_EMERG,
+             "mm_free: heap=%p address=%p is outside its regions\n",
+             heap, mem);
+      DEBUGPANIC();
+      return;
+    }
+#endif
 
   DEBUGASSERT(mm_heapmember(heap, mem));
 
