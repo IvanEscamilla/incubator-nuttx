@@ -254,6 +254,39 @@ int kthread_create_with_stack(FAR const char *name, int priority,
                          stack_addr, stack_size, entry, argv, NULL);
 }
 
+#ifdef CONFIG_SMP
+int kthread_create_with_stack_affinity(FAR const char *name, int priority,
+                                       FAR void *stack_addr, int stack_size,
+                                       main_t entry, FAR char * const argv[],
+                                       cpu_set_t affinity)
+{
+  FAR struct tcb_s *tcb;
+  pid_t pid;
+  int ret;
+
+  tcb = kmm_zalloc(sizeof(struct tcb_s));
+  if (tcb == NULL)
+    {
+      serr("ERROR: Failed to allocate TCB\n");
+      return -ENOMEM;
+    }
+
+  tcb->flags = TCB_FLAG_TTYPE_KERNEL | TCB_FLAG_FREE_TCB;
+  ret = nxtask_init(tcb, name, priority, stack_addr, stack_size, entry,
+                    argv, NULL, NULL);
+  if (ret < OK)
+    {
+      kmm_free(tcb);
+      return ret;
+    }
+
+  tcb->affinity = affinity;
+  pid = tcb->pid;
+  nxtask_activate(tcb);
+  return pid;
+}
+#endif
+
 /****************************************************************************
  * Name: kthread_create
  *

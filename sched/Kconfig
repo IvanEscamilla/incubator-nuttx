@@ -1883,6 +1883,14 @@ config SCHED_HPWORKSTACKSECTION
 	---help---
 		The section where hpwork stack is located.
 
+config SCHED_HPWORK_CPUAFFINITY
+	hex "High-priority worker CPU affinity mask"
+	default 0
+	depends on SMP
+	---help---
+		CPU mask for high-priority worker threads.  A value of zero leaves
+		the default affinity unchanged.  Bit 0 selects CPU 0.
+
 endif # SCHED_HPWORK
 
 config SCHED_LPWORK
@@ -1987,6 +1995,14 @@ config SCHED_LPWORKSTACKSECTION
 	default ""
 	---help---
 		The section where lpwork stack is located.
+
+config SCHED_LPWORK_CPUAFFINITY
+	hex "Low-priority worker CPU affinity mask"
+	default 0
+	depends on SMP
+	---help---
+		CPU mask for low-priority worker threads.  A value of zero leaves
+		the default affinity unchanged.  Bit 0 selects CPU 0.
 
 endif # SCHED_LPWORK
 endmenu # Work Queue Support

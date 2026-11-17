@@ -342,7 +342,11 @@ static int work_thread(int argc, FAR char *argv[])
 
 static int work_thread_create(FAR const char *name, int priority,
                               FAR void *stack_addr, int stack_size,
-                              FAR struct kwork_wqueue_s *wqueue)
+                              FAR struct kwork_wqueue_s *wqueue
+#ifdef CONFIG_SMP
+                              , cpu_set_t affinity
+#endif
+                              )
 {
   FAR struct kworker_s *worker = wq_get_worker(wqueue);
   FAR char *argv[3];
@@ -375,8 +379,19 @@ static int work_thread_create(FAR const char *name, int priority,
           stack = (FAR void *)((uintptr_t)stack_addr + wndx * stack_size);
         }
 
-      pid = kthread_create_with_stack(name, priority, stack,
-                                      stack_size, work_thread, argv);
+#ifdef CONFIG_SMP
+      if (affinity != 0)
+        {
+          pid = kthread_create_with_stack_affinity(name, priority, stack,
+                                                    stack_size, work_thread,
+                                                    argv, affinity);
+        }
+      else
+#endif
+        {
+          pid = kthread_create_with_stack(name, priority, stack,
+                                          stack_size, work_thread, argv);
+        }
 
       DEBUGASSERT(pid > 0);
       if (pid < 0)
@@ -474,7 +489,11 @@ FAR struct kwork_wqueue_s *work_queue_create(FAR const char *name,
 
   /* Create the work queue thread pool */
 
-  ret = work_thread_create(name, priority, stack_addr, stack_size, wqueue);
+  ret = work_thread_create(name, priority, stack_addr, stack_size, wqueue
+#ifdef CONFIG_SMP
+                           , 0
+#endif
+                           );
   if (ret < 0)
     {
       kmm_free(wqueue);
@@ -609,11 +628,19 @@ int work_start_highpri(void)
                             CONFIG_SCHED_HPWORKPRIORITY,
                             hp_work_stack,
                             CONFIG_SCHED_HPWORKSTACKSIZE,
-                            (FAR struct kwork_wqueue_s *)&g_hpwork);
+                            (FAR struct kwork_wqueue_s *)&g_hpwork
+#ifdef CONFIG_SMP
+                            , CONFIG_SCHED_HPWORK_CPUAFFINITY
+#endif
+                            );
 #else
   return work_thread_create(HPWORKNAME, CONFIG_SCHED_HPWORKPRIORITY, NULL,
                             CONFIG_SCHED_HPWORKSTACKSIZE,
-                            (FAR struct kwork_wqueue_s *)&g_hpwork);
+                            (FAR struct kwork_wqueue_s *)&g_hpwork
+#ifdef CONFIG_SMP
+                            , CONFIG_SCHED_HPWORK_CPUAFFINITY
+#endif
+                            );
 #endif
 }
 #endif /* CONFIG_SCHED_HPWORK */
@@ -649,12 +676,20 @@ int work_start_lowpri(void)
                             CONFIG_SCHED_LPWORKPRIORITY,
                             lp_work_stack,
                             CONFIG_SCHED_LPWORKSTACKSIZE,
-                            (FAR struct kwork_wqueue_s *)&g_lpwork);
+                            (FAR struct kwork_wqueue_s *)&g_lpwork
+#ifdef CONFIG_SMP
+                            , CONFIG_SCHED_LPWORK_CPUAFFINITY
+#endif
+                            );
 #else
   return work_thread_create(LPWORKNAME,
                             CONFIG_SCHED_LPWORKPRIORITY, NULL,
                             CONFIG_SCHED_LPWORKSTACKSIZE,
-                            (FAR struct kwork_wqueue_s *)&g_lpwork);
+                            (FAR struct kwork_wqueue_s *)&g_lpwork
+#ifdef CONFIG_SMP
+                            , CONFIG_SCHED_LPWORK_CPUAFFINITY
+#endif
+                            );
 #endif
 }
 #endif /* CONFIG_SCHED_LPWORK */

@@ -79,6 +79,22 @@ int kthread_create_with_stack(FAR const char *name, int priority,
                               FAR void *stack_addr, int stack_size,
                               main_t entry, FAR char * const argv[]);
 
+#ifdef CONFIG_SMP
+/****************************************************************************
+ * Name: kthread_create_with_stack_affinity
+ *
+ * Description:
+ *   Create a kernel thread with a non-default CPU affinity.  The affinity
+ *   is installed before the thread is activated.
+ *
+ ****************************************************************************/
+
+int kthread_create_with_stack_affinity(FAR const char *name, int priority,
+                                       FAR void *stack_addr, int stack_size,
+                                       main_t entry, FAR char * const argv[],
+                                       cpu_set_t affinity);
+#endif
+
 /****************************************************************************
  * Name: kthread_create
  *
