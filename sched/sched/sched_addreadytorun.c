@@ -207,6 +207,26 @@ bool nxsched_switch_running(int cpu, bool switch_equal)
 
           btcb->cpu = cpu;
           btcb->task_state = TSTATE_TASK_RUNNING;
+
+          /* The task put back may be unable to run here (its affinity was
+           * just changed by nxsched_set_affinity()).  Nobody else will
+           * look at the ready-to-run list until another CPU reschedules,
+           * so deliver it now or an idle CPU keeps sleeping while the
+           * task waits.  Tasks still allowed here keep the old behaviour.
+           */
+
+          if (!is_idle_task(rtcb) && !CPU_ISSET(cpu, &rtcb->affinity))
+            {
+              int target = nxsched_select_cpu(rtcb->affinity);
+
+              if (target != cpu && target < CONFIG_SMP_NCPUS &&
+                  current_task(target)->sched_priority <
+                  rtcb->sched_priority)
+                {
+                  nxsched_deliver_task(cpu, target, SWITCH_HIGHER);
+                }
+            }
+
           ret = true;
           break;
         }
