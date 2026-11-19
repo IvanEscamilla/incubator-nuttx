@@ -125,6 +125,11 @@ struct ft5x06_dev_s
   struct wdog_s polltimer;                  /* Poll timer */
 #endif
   uint8_t touchbuf[FT5X06_TOUCH_DATA_LEN];  /* Raw touch data */
+  union
+  {
+    struct touch_sample_s sample;
+    uint8_t buffer[SIZEOF_TOUCH_SAMPLE_S(FT5X06_MAX_TOUCHES)];
+  } samplebuf;                              /* Decoded touch sample */
 };
 
 /****************************************************************************
@@ -169,12 +174,11 @@ static const uint8_t g_event_map[4] =
 
 static void ft5x06_notify(FAR struct ft5x06_dev_s *priv)
 {
-  struct touch_sample_s sample;
-
-  memset(&sample, 0, sizeof(sample));
-  if (ft5x06_sample(priv, (FAR char *)&sample, sizeof(sample)) > 0)
+  memset(&priv->samplebuf, 0, sizeof(priv->samplebuf));
+  if (ft5x06_sample(priv, (FAR char *)priv->samplebuf.buffer,
+                    sizeof(priv->samplebuf.buffer)) > 0)
     {
-      touch_event(priv->config.lower.priv, &sample);
+      touch_event(priv->config.lower.priv, &priv->samplebuf.sample);
     }
 }
 
@@ -237,6 +241,10 @@ static void ft5x06_data_worker(FAR void *arg)
        */
 
       sample = (FAR struct ft5x06_touch_data_s *)priv->touchbuf;
+
+      /* FT6x36 reserves the upper nibble of TD_STATUS. */
+
+      sample->tdstatus &= 0x0f;
 
       /* Notify waiters (only if we ready some valid data).
        *
@@ -775,6 +783,13 @@ int ft5x06_register(FAR struct i2c_master_s *i2c,
   /* Save the board configuration */
 
   memcpy(&priv->config, config, sizeof(priv->config));
+
+  /* Old board configurations did not populate this field. */
+
+  if (priv->config.lower.maxpoint == 0)
+    {
+      priv->config.lower.maxpoint = FT5X06_MAX_TOUCHES;
+    }
 
   nxmutex_init(&priv->devlock);        /* Initialize device structure mutex */
 
