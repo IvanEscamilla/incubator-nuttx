@@ -332,6 +332,7 @@ static int task_create_wrapper(void *task_func,
 static void task_delete_wrapper(void *task_handle);
 static bool IRAM_ATTR is_in_isr_wrapper(void);
 static void *malloc_wrapper(size_t size);
+static void free_wrapper(void *p);
 static void *malloc_internal_wrapper(size_t size);
 static int IRAM_ATTR read_mac_wrapper(uint8_t mac[6]);
 static void IRAM_ATTR srand_wrapper(unsigned int seed);
@@ -525,7 +526,7 @@ static struct osi_funcs_s g_osi_funcs =
   ._cause_sw_intr_to_core = NULL,
   ._malloc = malloc_wrapper,
   ._malloc_internal = malloc_internal_wrapper,
-  ._free = free,
+  ._free = free_wrapper,
   ._read_efuse_mac = read_mac_wrapper,
   ._srand = srand_wrapper,
   ._rand = rand_wrapper,
@@ -1460,6 +1461,25 @@ static void *malloc_wrapper(size_t size)
   DEBUGASSERT(p);
 
   return p;
+}
+
+/****************************************************************************
+ * Name: free_wrapper
+ *
+ * Description:
+ *   Free a buffer allocated by malloc_wrapper() (kernel heap)
+ *
+ * Input Parameters:
+ *   p - buffer pointer
+ *
+ * Returned Value:
+ *   None
+ *
+ ****************************************************************************/
+
+static void free_wrapper(void *p)
+{
+  kmm_free(p);
 }
 
 /****************************************************************************
@@ -2600,8 +2620,8 @@ static void bt_controller_deinit_internal(void)
 
   if (g_osi_funcs_p != NULL)
     {
-    free(g_osi_funcs_p);
-    g_osi_funcs_p = NULL;
+      kmm_free(g_osi_funcs_p);
+      g_osi_funcs_p = NULL;
     }
 
   g_btdm_controller_status = ESP_BT_CONTROLLER_STATUS_IDLE;
